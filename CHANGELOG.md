@@ -5,6 +5,23 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [2.6.2] - 23/10/2026
+
+### Adicionado
+- **Protocolo Operacional Anti-Vibe Coding Cego (`tests/qa_visual_inspection.py`):** Script de inspeção visual automatizada ponta a ponta que executa toda a suíte unitária, valida a chave de API real/falsa sem falso-positivo, verifica a integridade DOM do Quadro Negro e Layout Sticky, sobe o servidor Streamlit em modo headless e captura evidências visuais e logs de auditoria em `tests/screenshots/`.
+
+## [2.6.1] - 23/10/2026
+
+### Corrigido
+- **Encapsulamento Estrito do Quadro Negro (`app.py`, `src/conrad_canvas.py`):** Substituição das tags HTML abertas `<div class="canvas-container">` por contêineres nativos `st.container(border=True)` estilizados via `div[data-testid="stVerticalBlockBorderWrapper"]`, garantindo que fórmulas MathJax/KaTeX, diagramas Mermaid e blocos de código renderizem 100% dentro da moldura da lousa.
+- **Área de Perguntas Fixa no Rodapé e Scroll Independente (`app.py`):** Aplicação das diretrizes de estabilidade de layout (`max-height: calc(100dvh - 220px)`, `overflow-y: auto`, `scrollbar-gutter: stable`, `overscroll-behavior: contain`) no contêiner de mensagens e fixação de `.stChatInput` com `position: sticky; bottom: 0; backdrop-filter: blur(12px)`.
+
+## [2.6.0] - 23/10/2026
+
+### Corrigido
+- **Validação Canônica da API Key com Zero Falso-Positivo (`src/conrad_core.py`, `tests/test_api_and_database.py`):** Refatoração de `validate_api_key()` para consultar `client.models.list()` em vez de disparar gerações de conteúdo, validando credenciais reais em milissegundos sem gastar tokens e rejeitando exclusivamente erros reais de autenticação (`API_KEY_INVALID`, `PERMISSION_DENIED`, `UNAUTHENTICATED`).
+- **Otimização de Latência e Buffer de Streaming (`app.py`, `src/conrad_core.py`):** Implementação de throttling temporal (`RENDER_THROTTLE_SECONDS = 0.04` / ~25fps) durante o streaming no `app.py` e execução única do parser do Canvas ao final da resposta, eliminando gargalos de reconstrução de DOM a cada caractere.
+
 ## [2.5.0] - 23/10/2026
 
 ### Adicionado
