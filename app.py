@@ -1,7 +1,7 @@
 """
-Interface Web Autônoma do Conrad — Versão 2.3.0
-Modos Pedagógicos Especializados, Pensamento Socrático Visível (CoT),
-Split-View com Quadro Negro Interativo (Conrad Canvas), Mermaid Nativo, Gemini 3.8 Flash e Onboarding BYOK.
+Interface Web Autônoma do Conrad — Versão 2.4.0
+Memória Pedagógica Persistente (Perfil Cognitivo), Upload Multimodal (Fotos & PDFs),
+Modos Pedagógicos Especializados, Pensamento Socrático Visível (CoT) e Conrad Canvas Split-View.
 """
 import re
 import html
@@ -9,7 +9,11 @@ import streamlit as st
 from src.conrad_core import ConradEngine, DEFINITIVE_MODELS, DEFAULT_MODEL_NAME
 from src.conrad_persona import get_missing_key_message, PEDAGOGICAL_MODES
 from src.conrad_canvas import CanvasParser
+from src.database import init_db, SessionLocal, get_or_create_profile, update_profile
 from src.assets.conrad_avatar import CONRAD_AVATAR_SVG
+
+# Inicializa o banco de dados local SQLite (Zero-Config)
+init_db()
 
 st.set_page_config(
     page_title="Conrad — Tutor Socrático",
@@ -78,6 +82,39 @@ if "active_artifact" not in st.session_state:
     st.session_state.active_artifact = None
 
 
+def _load_cognitive_profile():
+    """Carrega o perfil cognitivo persistente do aluno a partir do banco SQLite."""
+    db = SessionLocal()
+    try:
+        profile = get_or_create_profile(db)
+        return {
+            "strengths": profile.strengths,
+            "difficulties": profile.difficulties,
+            "learning_style": profile.learning_style,
+            "pedagogical_notes": profile.pedagogical_notes,
+        }
+    finally:
+        db.close()
+
+
+def _save_cognitive_profile(strengths: str, difficulties: str, learning_style: str, pedagogical_notes: str):
+    """Persiste atualizações do perfil cognitivo no banco SQLite."""
+    db = SessionLocal()
+    try:
+        update_profile(
+            db,
+            strengths=strengths,
+            difficulties=difficulties,
+            learning_style=learning_style,
+            pedagogical_notes=pedagogical_notes,
+        )
+    finally:
+        db.close()
+
+
+cognitive_profile = _load_cognitive_profile()
+
+
 def _render_cot_details(thought_text: str = ""):
     """Renderiza o bloco expansível de CoT com elementos nativos <details> e <summary>."""
     default_cot = (
@@ -134,7 +171,7 @@ def _format_study_summary_markdown(messages) -> str:
 
 
 # ==============================================================================
-# --- SIDEBAR: MODOS PEDAGÓGICOS, MODELOS, ONBOARDING BYOK & UTILITÁRIOS ---
+# --- SIDEBAR: MODOS PEDAGÓGICOS, PERFIL COGNITIVO, MODELOS & ONBOARDING BYOK ---
 # ==============================================================================
 with st.sidebar:
     st.markdown(
@@ -169,9 +206,30 @@ with st.sidebar:
         st.session_state.engine.set_model(selected_model_id)
         st.toast(f"Modelo alterado para {selected_model_id}!", icon="🎩")
 
+    # 3. Memória Pedagógica Persistente (Perfil Cognitivo)
+    with st.expander("🧠 Seu Perfil de Aprendizado (O que o Conrad já aprendeu sobre você)", expanded=False):
+        st.markdown(
+            f"**✅ Pontos Fortes:** {cognitive_profile['strengths']}\n\n"
+            f"**🎯 Em Evolução:** {cognitive_profile['difficulties']}\n\n"
+            f"**🎨 Estilo Preferido:** {cognitive_profile['learning_style']}\n\n"
+            f"**📝 Notas do Tutor:** *{cognitive_profile['pedagogical_notes']}*"
+        )
+        new_strengths = st.text_input("Atualizar Pontos Fortes:", value=cognitive_profile["strengths"])
+        new_difficulties = st.text_input("Atualizar Temas em Evolução:", value=cognitive_profile["difficulties"])
+        new_style = st.text_input("Estilo de Aprendizado:", value=cognitive_profile["learning_style"])
+        if st.button("💾 Atualizar Perfil Cognitivo", use_container_width=True):
+            _save_cognitive_profile(
+                strengths=new_strengths,
+                difficulties=new_difficulties,
+                learning_style=new_style,
+                pedagogical_notes=cognitive_profile["pedagogical_notes"],
+            )
+            st.success("Perfil cognitivo salvo no banco de dados!")
+            st.rerun()
+
     st.divider()
 
-    # 3. Gerenciamento da API Key (BYOK)
+    # 4. Gerenciamento da API Key (BYOK)
     st.subheader("🔑 Chave da API Gemini (BYOK)")
     api_key_input = st.text_input(
         "Insira sua chave do Google AI Studio:",
@@ -193,7 +251,7 @@ with st.sidebar:
     else:
         st.caption("🟠 Status: Aguardando configuração de chave.")
 
-    # 4. Tutorial Visual Expansível
+    # 5. Tutorial Visual Expansível
     with st.expander("📘 Como Obter sua Chave Gratuita", expanded=not bool(st.session_state.engine.api_key)):
         st.markdown(
             """
@@ -207,7 +265,7 @@ with st.sidebar:
 
     st.divider()
 
-    # 5. Métricas de Tokens e Utilitários de Sessão
+    # 6. Métricas de Tokens e Utilitários de Sessão
     st.subheader("📊 Métricas & Utilitários")
     current_tokens = st.session_state.engine.count_tokens()
     st.markdown(
@@ -242,17 +300,50 @@ with col_chat:
         f"Modo: **{PEDAGOGICAL_MODES[st.session_state.current_mode]['nome']}** | Modelo: `{st.session_state.engine.model_name}`"
     )
 
-    # Renderização das mensagens de chat (apenas diálogo limpo + CoT expansível em <details>)
+    # Renderização das mensagens de chat (apenas diálogo limpo + miniatura de mídia + CoT expansível)
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"], avatar="🎩" if msg["role"] == "assistant" else None):
             if msg["role"] == "assistant" and msg.get("show_cot", False):
                 _render_cot_details(msg.get("thought") or "")
+            if msg.get("media_bytes") and msg.get("mime_type", "").startswith("image/"):
+                st.image(msg["media_bytes"], width=220)
+            elif msg.get("media_name"):
+                st.caption(f"📄 Arquivo anexado: `{msg['media_name']}`")
             st.markdown(msg["content"])
+
+    # Widget Multimodal de Upload de Fotos de Caderno e PDFs de Listas
+    uploaded_file = st.file_uploader(
+        "📎 Anexar foto do caderno, lista ou PDF de estudos:",
+        type=["png", "jpg", "jpeg", "pdf"],
+        key="study_media_uploader",
+    )
 
     # Input do aluno
     if prompt := st.chat_input("Como posso ajudar seus estudos hoje? (digite 'fim' para encerrar)"):
-        st.session_state.messages.append({"role": "user", "content": prompt})
+        media_bytes = None
+        mime_type = None
+        media_name = None
+        if uploaded_file is not None:
+            media_bytes = uploaded_file.getvalue()
+            mime_type = uploaded_file.type or (
+                "application/pdf" if uploaded_file.name.lower().endswith(".pdf") else "image/png"
+            )
+            media_name = uploaded_file.name
+
+        st.session_state.messages.append(
+            {
+                "role": "user",
+                "content": prompt,
+                "media_bytes": media_bytes,
+                "mime_type": mime_type,
+                "media_name": media_name,
+            }
+        )
         with st.chat_message("user"):
+            if media_bytes and mime_type and mime_type.startswith("image/"):
+                st.image(uploaded_file, width=220)
+            elif media_name:
+                st.caption(f"📄 Arquivo anexado: `{media_name}`")
             st.markdown(prompt)
 
         with st.chat_message("assistant", avatar="🎩"):
@@ -273,18 +364,43 @@ with col_chat:
                 st.session_state.messages.append(
                     {"role": "assistant", "content": farewell_msg, "show_cot": False}
                 )
-            # Caso 3: Streaming em tempo real + CoT Visível + Extração de Artifacts para o Quadro Negro
+            # Caso 3: Envio Multimodal ou Streaming com Memória Cognitiva + Extração de Artifacts
             else:
                 cot_slot = st.empty()
                 with cot_slot.container():
                     _render_cot_details()
 
+                memory_summary = (
+                    f"Pontos fortes: {cognitive_profile['strengths']} | "
+                    f"Dificuldades em evolução: {cognitive_profile['difficulties']} | "
+                    f"Estilo de aprendizado: {cognitive_profile['learning_style']} | "
+                    f"Notas: {cognitive_profile['pedagogical_notes']}"
+                )
+                memory_prefix = st.session_state.engine.build_context_with_memory(memory_summary)
+
                 response_placeholder = st.empty()
                 full_text = ""
-                for chunk in st.session_state.engine.send_message_stream(prompt):
-                    full_text += chunk
-                    preview_text, _ = CanvasParser.parse_message(full_text)
-                    response_placeholder.markdown(preview_text + "▌")
+
+                if media_bytes and mime_type:
+                    multimodal_prompt = (
+                        f"{memory_prefix}"
+                        "Transcreva o enunciado ou equação deste material para o Quadro Negro usando "
+                        '<conrad_artifact type="math" title="Enunciado Transcrito"> (ou o tipo mais adequado) '
+                        "e comece guiando o estudante com uma pergunta indutiva sobre o primeiro passo.\n\n"
+                        f"Mensagem do estudante: {prompt}"
+                    )
+                    with st.spinner("Analisando foto/documento anexado e preparando o Quadro Negro..."):
+                        full_text = st.session_state.engine.send_message_multimodal(
+                            prompt=multimodal_prompt,
+                            media_bytes=media_bytes,
+                            mime_type=mime_type,
+                        )
+                else:
+                    contextual_prompt = f"{memory_prefix}{prompt}"
+                    for chunk in st.session_state.engine.send_message_stream(contextual_prompt):
+                        full_text += chunk
+                        preview_text, _ = CanvasParser.parse_message(full_text)
+                        response_placeholder.markdown(preview_text + "▌")
 
                 text_without_thought, extracted_thought = CanvasParser.parse_thought(full_text)
                 if extracted_thought:

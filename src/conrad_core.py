@@ -89,6 +89,10 @@ class ConradEngine:
             if self.client and self.api_key:
                 self._init_chat()
 
+    def build_context_with_memory(self, memory_notes: str) -> str:
+        """Gera injeção de contexto com o histórico pedagógico do aluno."""
+        return f"[HISTÓRICO PEDAGÓGICO DO ESTUDANTE]: {memory_notes}\n"
+
     def validate_api_key(self) -> bool:
         """Testa se a chave atual é válida realizando uma requisição mínima de teste."""
         if not self.api_key:
@@ -174,6 +178,36 @@ class ConradEngine:
 
         except Exception as e:
             raise RuntimeError(f"Erro na comunicação com a API Gemini: {str(e)}")
+
+    def send_message_multimodal(
+        self,
+        prompt: str,
+        media_bytes: Optional[bytes] = None,
+        mime_type: Optional[str] = None,
+    ) -> str:
+        """Envia prompt acompanhado de mídia binária (imagem ou PDF)."""
+        if not self.chat:
+            raise RuntimeError("Sessão de chat não inicializada.")
+
+        contents = []
+        if media_bytes and mime_type:
+            part = types.Part.from_bytes(data=media_bytes, mime_type=mime_type)
+            contents.append(part)
+
+        contents.append(prompt or "Por favor, analise este material e me guie no entendimento do exercício.")
+
+        try:
+            try:
+                response = self.chat.send_message(contents)
+            except Exception as err:
+                if "404" in str(err) or "NOT_FOUND" in str(err):
+                    self._init_chat(effective_model="gemini-2.5-flash")
+                    response = self.chat.send_message(contents)
+                else:
+                    raise
+            return response.text if response.text else "(Sem resposta textual da API)"
+        except Exception as e:
+            raise RuntimeError(f"Erro ao processar conteúdo multimodal: {str(e)}")
 
     def send_message_stream(self, prompt: str):
         """Envia mensagem e gera chunks de texto em streaming (tempo real)."""

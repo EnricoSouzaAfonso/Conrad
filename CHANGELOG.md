@@ -5,6 +5,13 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [2.4.0] - 23/10/2026
+
+### Adicionado
+- **Memória Pedagógica Persistente (`src/database.py`, `src/conrad_core.py`, `app.py`):** Nova tabela ORM `StudentCognitiveProfile` e funções `get_or_create_profile()` / `update_profile()` para salvar pontos fortes, temas em evolução, estilo de aprendizado e notas pedagógicas em `conrad_data.db`, com injeção automática no contexto (`build_context_with_memory()`).
+- **Tutoria Multimodal Nativa para Fotos & PDFs (`src/conrad_core.py`, `app.py`):** Método `send_message_multimodal()` utilizando `types.Part.from_bytes()` do SDK `google-genai` e widget `st.file_uploader` para envio de fotos de caderno (`PNG`/`JPG`) e listas de exercícios em `PDF`, transcrevendo enunciados diretamente para o Quadro Negro.
+- **Suíte de Testes Multimodais e de Memória (`tests/test_multimodal_and_memory.py`):** Validação automatizada de persistência do perfil cognitivo e envio de mídias binárias (imagens e PDFs) com extração no Canvas.
+
 ## [2.3.0] - 23/10/2026
 
 ### Adicionado
