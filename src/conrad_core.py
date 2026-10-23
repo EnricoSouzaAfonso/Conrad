@@ -3,27 +3,35 @@ import html
 from typing import Optional
 from google import genai
 from google.genai import types
-from src.conrad_persona import get_system_instruction
+from src.conrad_persona import get_system_instruction, get_missing_key_message
+
+# Lista oficial de modelos definitivos (sem previews temporários que expiram)
+DEFINITIVE_MODELS = {
+    "Gemini 3.8 Flash (Padrão — Rápido, 1M Tokens)": "gemini-3.8-flash",
+    "Gemini 2.5 Flash (Estável)": "gemini-2.5-flash",
+    "Gemini 2.5 Pro (Raciocínio Profundo & Exatas)": "gemini-2.5-pro",
+    "Gemini 1.5 Flash (Legado Estável)": "gemini-1.5-flash",
+    "Gemini 1.5 Pro (Legado Pro)": "gemini-1.5-pro",
+}
+
+DEFAULT_MODEL_NAME = "gemini-3.8-flash"
+
 
 class ConradEngine:
     def __init__(
         self,
         api_key: Optional[str] = None,
-        model_name: str = "gemini-2.5-flash",
+        model_name: str = DEFAULT_MODEL_NAME,
         system_instruction: Optional[str] = None
     ):
-        self.api_key = api_key or self._resolve_api_key()
-        if not self.api_key:
-            raise ValueError(
-                "API Key não encontrada. Configure a variável de ambiente GEMINI_API_KEY / GOOGLE_API_KEY "
-                "ou forneça nos Secrets do Google Colab."
-            )
-            
+        self.api_key = api_key if api_key is not None else self._resolve_api_key()
         self.model_name = model_name
         self.system_instruction = system_instruction or get_system_instruction()
-        self.client = genai.Client(api_key=self.api_key)
+        self.client = None
         self.chat = None
-        self._init_chat()
+
+        if self.api_key:
+            self._init_client_and_chat()
 
     def _resolve_api_key(self) -> Optional[str]:
         # 1. Checa variáveis de ambiente de sistema
@@ -50,8 +58,52 @@ class ConradEngine:
         except Exception:
             return None
 
-    def _init_chat(self):
-        config = types.GenerateContentConfig(
+    def set_api_key(self, new_key: str):
+        """Atualiza a chave de API e reinicializa o cliente e a sessão de chat."""
+        self.api_key = new_key.strip() if new_key else None
+        if self.api_key:
+            self._init_client_and_chat()
+        else:
+            self.client = None
+            self.chat = None
+
+    def set_model(self, model_name: str):
+        """Altera o modelo e preserva as configurações do chat."""
+        self.model_name = model_name
+        if self.api_key:
+            if not self.client:
+                self.client = genai.Client(api_key=self.api_key)
+            self._init_chat()
+
+    def validate_api_key(self) -> bool:
+        """Testa se a chave atual é válida realizando uma requisição mínima de teste."""
+        if not self.api_key:
+            return False
+        try:
+            test_client = genai.Client(api_key=self.api_key)
+            try:
+                test_res = test_client.models.generate_content(
+                    model=self.model_name,
+                    contents="ping"
+                )
+            except Exception as err:
+                if "404" in str(err) or "NOT_FOUND" in str(err):
+                    test_res = test_client.models.generate_content(
+                        model="gemini-2.5-flash",
+                        contents="ping"
+                    )
+                else:
+                    raise
+            return bool(test_res)
+        except Exception:
+            return False
+
+    def _init_client_and_chat(self):
+        self.client = genai.Client(api_key=self.api_key)
+        self._init_chat()
+
+    def _build_chat_config(self) -> types.GenerateContentConfig:
+        return types.GenerateContentConfig(
             temperature=0.7,
             top_p=0.95,
             top_k=40,
@@ -76,15 +128,27 @@ class ConradEngine:
                 ),
             ]
         )
-        self.chat = self.client.chats.create(model=self.model_name, config=config)
+
+    def _init_chat(self, effective_model: Optional[str] = None):
+        config = self._build_chat_config()
+        target_model = effective_model or self.model_name
+        self.chat = self.client.chats.create(model=target_model, config=config)
 
     def send_message(self, prompt: str) -> str:
-        """Envia mensagem para a sessão ativa de chat e trata bloqueios ou erros."""
-        if not self.chat:
-            raise RuntimeError("Sessão de chat não inicializada.")
+        """Envia mensagem para a sessão ativa de chat e trata bloqueios, ausência de chave ou erros."""
+        if not self.api_key or not self.chat:
+            return get_missing_key_message()
         
         try:
-            response = self.chat.send_message(prompt)
+            try:
+                response = self.chat.send_message(prompt)
+            except Exception as err:
+                if "404" in str(err) or "NOT_FOUND" in str(err):
+                    self._init_chat(effective_model="gemini-2.5-flash")
+                    response = self.chat.send_message(prompt)
+                else:
+                    raise
+
             if response.text:
                 return response.text
             
@@ -99,29 +163,47 @@ class ConradEngine:
 
     def send_message_stream(self, prompt: str):
         """Envia mensagem e gera chunks de texto em streaming (tempo real)."""
-        if not self.chat:
-            raise RuntimeError("Sessão de chat não inicializada.")
+        if not self.api_key or not self.chat:
+            yield get_missing_key_message()
+            return
         
         try:
-            response_stream = self.chat.send_message_stream(prompt)
-            for chunk in response_stream:
-                if chunk.text:
-                    yield chunk.text
+            try:
+                response_stream = self.chat.send_message_stream(prompt)
+                for chunk in response_stream:
+                    if chunk.text:
+                        yield chunk.text
+            except Exception as err:
+                if "404" in str(err) or "NOT_FOUND" in str(err):
+                    self._init_chat(effective_model="gemini-2.5-flash")
+                    response_stream = self.chat.send_message_stream(prompt)
+                    for chunk in response_stream:
+                        if chunk.text:
+                            yield chunk.text
+                else:
+                    raise
         except Exception as e:
             yield f"(Erro no streaming: {str(e)})"
 
     def count_tokens(self, contents=None) -> int:
         """Calcula o consumo de tokens atual via client.models.count_tokens."""
+        if not self.api_key or not self.client:
+            return 0
         try:
             if contents is None and self.chat:
-                # Usa o histórico do chat atual se nenhum conteúdo for passado
                 history = self.chat.get_history()
                 if not history:
                     return 0
-                res = self.client.models.count_tokens(model=self.model_name, contents=history)
+                try:
+                    res = self.client.models.count_tokens(model=self.model_name, contents=history)
+                except Exception:
+                    res = self.client.models.count_tokens(model="gemini-2.5-flash", contents=history)
                 return getattr(res, "total_tokens", 0)
             
-            res = self.client.models.count_tokens(model=self.model_name, contents=contents)
+            try:
+                res = self.client.models.count_tokens(model=self.model_name, contents=contents)
+            except Exception:
+                res = self.client.models.count_tokens(model="gemini-2.5-flash", contents=contents)
             return getattr(res, "total_tokens", 0)
         except Exception:
             return 0

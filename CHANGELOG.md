@@ -5,6 +5,14 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [2.1.0] - 23/10/2026
+
+### Adicionado
+- **Upgrade para Gemini 3.8 Flash & Seletor de Modelos Definitivos (`src/conrad_core.py`, `app.py`):** Adoção do modelo `gemini-3.8-flash` como padrão (`DEFAULT_MODEL_NAME`) e seletor dinâmico com a lista curada `DEFINITIVE_MODELS`.
+- **Onboarding BYOK (Bring Your Own Key) & Validação em Tempo Real (`app.py`, `src/conrad_core.py`):** Inicialização resiliente sem chave (Zero Crash), campo de senha na sidebar com botão "Salvar e Validar Chave" (`validate_api_key()`) e tutorial expansível passo a passo do Google AI Studio.
+- **Mensagem Pré-Programada da Cartola (`src/conrad_persona.py`):** Constante `MSG_CONRAD_SEM_API_KEY` (`get_missing_key_message()`) exibida graciosamente no chat quando nenhuma chave está configurada.
+- **Diagramas Conceituais Mermaid & Utilitários de Estudo:** Diretriz de geração de mapas mentais em `mermaid`, contador de tokens na sidebar, botão "Nova Conversa" e exportação de resumo de estudos em Markdown (`.md`).
+
 ## [2.0.0] - 23/10/2026
 
 ### Adicionado

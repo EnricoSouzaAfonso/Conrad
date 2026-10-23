@@ -5,9 +5,11 @@ from src.conrad_persona import (
     CONRAD_VERSION,
     CONRAD_ARCHETYPE,
     SYSTEM_INSTRUCTION_CONRAD,
+    MSG_CONRAD_SEM_API_KEY,
     get_system_instruction,
+    get_missing_key_message,
 )
-from src.conrad_core import ConradEngine
+from src.conrad_core import ConradEngine, DEFINITIVE_MODELS, DEFAULT_MODEL_NAME
 
 
 class TestConradPersona(unittest.TestCase):
@@ -16,7 +18,7 @@ class TestConradPersona(unittest.TestCase):
 
     def test_metadados_persona(self):
         self.assertEqual(CONRAD_NAME, "Conrad")
-        self.assertEqual(CONRAD_VERSION, "1.6.1")
+        self.assertEqual(CONRAD_VERSION, "2.1.0")
         self.assertIn("Tutor Socrático", CONRAD_ARCHETYPE)
         self.assertEqual(self.instruction, SYSTEM_INSTRUCTION_CONRAD.strip())
 
@@ -34,13 +36,48 @@ class TestConradPersona(unittest.TestCase):
         self.assertIn("Passo 2 (Correção Suave e Firme)", self.instruction)
         self.assertIn("Passo 3 (Contextualização)", self.instruction)
 
-    def test_encerramento_estrito_presente(self):
+    def test_encerramento_estrito_e_mermaid_presentes(self):
         self.assertIn("digite exatamente 'fim'", self.instruction)
+        self.assertIn("MERMAID", self.instruction)
+        self.assertIn("```mermaid", self.instruction)
+
+    def test_mensagem_pre_programada_sem_api_key(self):
+        msg = get_missing_key_message()
+        self.assertEqual(msg, MSG_CONRAD_SEM_API_KEY.strip())
+        self.assertIn("Conrad", msg)
+        self.assertIn("Google Gemini", msg)
+        self.assertIn("menu à esquerda", msg)
+
+    def test_inicializacao_sem_chave_zero_crash(self):
+        with patch.object(ConradEngine, "_resolve_api_key", return_value=None):
+            engine = ConradEngine(api_key="")
+            self.assertEqual(engine.model_name, DEFAULT_MODEL_NAME)
+            self.assertEqual(DEFAULT_MODEL_NAME, "gemini-3.8-flash")
+            self.assertIsNone(engine.client)
+            self.assertIsNone(engine.chat)
+            self.assertFalse(engine.validate_api_key())
+            self.assertEqual(engine.send_message("Olá, Conrad"), get_missing_key_message())
+            self.assertEqual(list(engine.send_message_stream("Olá, Conrad")), [get_missing_key_message()])
+
+    @patch("src.conrad_core.genai.Client")
+    def test_validacao_chave_e_seletor_modelos(self, mock_client_cls):
+        mock_client = mock_client_cls.return_value
+        mock_client.models.generate_content.return_value = MagicMock(text="pong")
+
+        with patch.object(ConradEngine, "_resolve_api_key", return_value=None):
+            engine = ConradEngine(api_key="")
+            engine.set_api_key("AIzaSy_VALID_KEY")
+            self.assertTrue(engine.validate_api_key())
+
+            for label, model_id in DEFINITIVE_MODELS.items():
+                engine.set_model(model_id)
+                self.assertEqual(engine.model_name, model_id)
 
     @patch("src.conrad_core.genai.Client")
     def test_integracao_core_default_system_instruction(self, mock_client_cls):
         engine = ConradEngine(api_key="TEST_KEY")
         self.assertEqual(engine.system_instruction, self.instruction)
+        self.assertEqual(engine.model_name, "gemini-3.8-flash")
 
     @patch("src.conrad_core.genai.Client")
     def test_pratico_mathjax_massa_energia_e_planck(self, mock_client_cls):
