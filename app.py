@@ -1,6 +1,7 @@
 """
-Interface Web Autônoma do Conrad — Versão 2.4.0
-Memória Pedagógica Persistente (Perfil Cognitivo), Upload Multimodal (Fotos & PDFs),
+Interface Web Autônoma do Conrad — Versão 2.5.0
+Caderno Digital de Estudos (Exportação MD/PDF), Termômetro de Retenção Cognitiva,
+Memória Pedagógica Persistente, Upload Multimodal (Fotos & PDFs),
 Modos Pedagógicos Especializados, Pensamento Socrático Visível (CoT) e Conrad Canvas Split-View.
 """
 import re
@@ -9,6 +10,8 @@ import streamlit as st
 from src.conrad_core import ConradEngine, DEFINITIVE_MODELS, DEFAULT_MODEL_NAME
 from src.conrad_persona import get_missing_key_message, PEDAGOGICAL_MODES
 from src.conrad_canvas import CanvasParser
+from src.conrad_report import ConradNotebookCompiler
+from src.conrad_analytics import CognitiveRetentionTracker
 from src.database import init_db, SessionLocal, get_or_create_profile, update_profile
 from src.assets.conrad_avatar import CONRAD_AVATAR_SVG
 
@@ -22,7 +25,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# CSS para Dark Mode e Estilização do Quadro Negro (Split-View)
+# CSS para Dark Mode, Estilização do Quadro Negro (Split-View) e Impressão Limpa (@media print)
 st.markdown(
     """
 <style>
@@ -49,6 +52,10 @@ st.markdown(
       padding: 8px 12px;
       font-size: 0.85rem;
       margin-bottom: 10px;
+  }
+  @media print {
+      header, footer, [data-testid="stSidebar"], .stChatInput { display: none !important; }
+      .stApp { background: white !important; color: black !important; }
   }
 </style>
 """,
@@ -115,6 +122,14 @@ def _save_cognitive_profile(strengths: str, difficulties: str, learning_style: s
 cognitive_profile = _load_cognitive_profile()
 
 
+def _collect_session_artifacts():
+    """Reúne todos os artifacts gerados na sessão atual para compilação no Caderno Digital."""
+    collected = [m["artifact"] for m in st.session_state.messages if m.get("artifact") is not None]
+    if st.session_state.active_artifact and st.session_state.active_artifact not in collected:
+        collected.append(st.session_state.active_artifact)
+    return collected
+
+
 def _render_cot_details(thought_text: str = ""):
     """Renderiza o bloco expansível de CoT com elementos nativos <details> e <summary>."""
     default_cot = (
@@ -145,148 +160,6 @@ def _clean_code_or_mermaid_fence(content: str, expected_lang: str = "") -> str:
     if match:
         return match.group(1).strip()
     return stripped
-
-
-def _format_study_summary_markdown(messages) -> str:
-    """Exporta o histórico de estudos da sessão em formato Markdown estruturado."""
-    lines = [
-        "# 🎩 Resumo de Estudos — Sessão com o Conrad",
-        f"**Modelo utilizado:** `{st.session_state.engine.model_name}`",
-        f"**Modo Pedagógico:** `{PEDAGOGICAL_MODES[st.session_state.current_mode]['nome']}`",
-        "",
-        "---",
-        "",
-    ]
-    if not messages:
-        lines.append("*Nenhuma interação registrada nesta sessão ainda.*")
-    else:
-        for msg in messages:
-            author = "🧑 Você" if msg["role"] == "user" else "🎩 Conrad"
-            lines.append(f"### {author}\n\n{msg['content']}\n")
-            art = msg.get("artifact")
-            if art:
-                lines.append(f"\n#### 📐 Quadro Negro: {art.title} ({art.type.upper()})\n\n{art.content}\n")
-            lines.append("\n---\n")
-    return "\n".join(lines)
-
-
-# ==============================================================================
-# --- SIDEBAR: MODOS PEDAGÓGICOS, PERFIL COGNITIVO, MODELOS & ONBOARDING BYOK ---
-# ==============================================================================
-with st.sidebar:
-    st.markdown(
-        f"<div style='display:flex;align-items:center;gap:8px;'>{CONRAD_AVATAR_SVG} <h3 style='margin:0;'>Configurações</h3></div>",
-        unsafe_allow_html=True,
-    )
-    st.caption("Personalize o modo didático, motor cognitivo e sua chave de acesso.")
-
-    # 1. Seletor de Modo Pedagógico Especializado
-    modo_selecionado = st.selectbox(
-        "🎯 Modo Pedagógico",
-        options=list(PEDAGOGICAL_MODES.keys()),
-        index=list(PEDAGOGICAL_MODES.keys()).index(st.session_state.current_mode),
-        format_func=lambda k: PEDAGOGICAL_MODES[k]["nome"],
-        help="Altere o estilo de tutoria do Conrad conforme seu objetivo de estudo.",
-    )
-    if st.session_state.get("current_mode") != modo_selecionado:
-        st.session_state.current_mode = modo_selecionado
-        st.session_state.engine.set_pedagogical_mode(modo_selecionado)
-        st.toast(f"Modo alterado para {PEDAGOGICAL_MODES[modo_selecionado]['nome']}!", icon="🎩")
-    st.caption(f"ℹ️ {PEDAGOGICAL_MODES[modo_selecionado]['descricao']}")
-
-    # 2. Seletor de Modelos Definitivos
-    selected_label = st.selectbox(
-        "🤖 Modelo de IA (Estáveis)",
-        options=list(DEFINITIVE_MODELS.keys()),
-        index=list(DEFINITIVE_MODELS.keys()).index(st.session_state.selected_model_label),
-    )
-    selected_model_id = DEFINITIVE_MODELS[selected_label]
-    if selected_model_id != st.session_state.engine.model_name:
-        st.session_state.selected_model_label = selected_label
-        st.session_state.engine.set_model(selected_model_id)
-        st.toast(f"Modelo alterado para {selected_model_id}!", icon="🎩")
-
-    # 3. Memória Pedagógica Persistente (Perfil Cognitivo)
-    with st.expander("🧠 Seu Perfil de Aprendizado (O que o Conrad já aprendeu sobre você)", expanded=False):
-        st.markdown(
-            f"**✅ Pontos Fortes:** {cognitive_profile['strengths']}\n\n"
-            f"**🎯 Em Evolução:** {cognitive_profile['difficulties']}\n\n"
-            f"**🎨 Estilo Preferido:** {cognitive_profile['learning_style']}\n\n"
-            f"**📝 Notas do Tutor:** *{cognitive_profile['pedagogical_notes']}*"
-        )
-        new_strengths = st.text_input("Atualizar Pontos Fortes:", value=cognitive_profile["strengths"])
-        new_difficulties = st.text_input("Atualizar Temas em Evolução:", value=cognitive_profile["difficulties"])
-        new_style = st.text_input("Estilo de Aprendizado:", value=cognitive_profile["learning_style"])
-        if st.button("💾 Atualizar Perfil Cognitivo", use_container_width=True):
-            _save_cognitive_profile(
-                strengths=new_strengths,
-                difficulties=new_difficulties,
-                learning_style=new_style,
-                pedagogical_notes=cognitive_profile["pedagogical_notes"],
-            )
-            st.success("Perfil cognitivo salvo no banco de dados!")
-            st.rerun()
-
-    st.divider()
-
-    # 4. Gerenciamento da API Key (BYOK)
-    st.subheader("🔑 Chave da API Gemini (BYOK)")
-    api_key_input = st.text_input(
-        "Insira sua chave do Google AI Studio:",
-        value=st.session_state.engine.api_key or "",
-        type="password",
-        placeholder="AIzaSy...",
-    )
-
-    if st.button("Salvar e Validar Chave", use_container_width=True, type="primary"):
-        st.session_state.engine.set_api_key(api_key_input)
-        with st.spinner("Validando chave junto à API do Google Gemini..."):
-            if st.session_state.engine.validate_api_key():
-                st.success("✅ Chave válida e ativa!")
-            else:
-                st.error("❌ Chave inválida. Verifique os caracteres.")
-
-    if st.session_state.engine.api_key:
-        st.caption("🟢 Status: Chave configurada na sessão.")
-    else:
-        st.caption("🟠 Status: Aguardando configuração de chave.")
-
-    # 5. Tutorial Visual Expansível
-    with st.expander("📘 Como Obter sua Chave Gratuita", expanded=not bool(st.session_state.engine.api_key)):
-        st.markdown(
-            """
-            1. **Acesse o portal oficial:** Clique em [Google AI Studio](https://aistudio.google.com/app/apikey) e faça login com sua conta Google.
-            2. **Gere a chave:** Clique no botão azul **"Create API Key"**.
-            3. **Ative no Conrad:** Copie o código gerado (`AIza...`), cole no campo acima e clique em **"Salvar e Validar Chave"**.
-
-            💡 *Dica: O Google oferece uma cota **100% gratuita** e generosa para estudantes, professores e uso pessoal!*
-            """
-        )
-
-    st.divider()
-
-    # 6. Métricas de Tokens e Utilitários de Sessão
-    st.subheader("📊 Métricas & Utilitários")
-    current_tokens = st.session_state.engine.count_tokens()
-    st.markdown(
-        f"<div class='token-badge'><b>Tokens na Sessão:</b> {current_tokens:,} / 1.048.576</div>",
-        unsafe_allow_html=True,
-    )
-
-    if st.button("🔄 Nova Conversa", use_container_width=True):
-        st.session_state.messages = []
-        st.session_state.active_artifact = None
-        if st.session_state.engine.api_key:
-            st.session_state.engine._init_chat()
-        st.rerun()
-
-    st.download_button(
-        label="📥 Baixar Resumo de Estudos",
-        data=_format_study_summary_markdown(st.session_state.messages),
-        file_name="resumo_estudos_conrad.md",
-        mime="text/markdown",
-        use_container_width=True,
-    )
 
 
 # ==============================================================================
@@ -423,6 +296,8 @@ with col_chat:
                     }
                 )
 
+session_artifacts = _collect_session_artifacts()
+
 with col_canvas:
     st.subheader("📐 Quadro Negro do Conrad")
     with st.container():
@@ -449,3 +324,151 @@ with col_canvas:
                 "O Quadro Negro está limpo. Conforme o Conrad apresentar fórmulas, diagramas ou códigos, eles aparecerão aqui automaticamente!"
             )
         st.markdown("</div>", unsafe_allow_html=True)
+
+    # Botões de Exportação do Caderno Digital no Rodapé do Canvas
+    col_d1, col_d2 = st.columns(2)
+    with col_d1:
+        md_data = ConradNotebookCompiler.to_markdown(
+            "Matemática & Física",
+            st.session_state.messages,
+            session_artifacts,
+        )
+        st.download_button(
+            "📥 Baixar Resumo (.md)",
+            data=md_data,
+            file_name="caderno_conrad.md",
+            mime="text/markdown",
+            use_container_width=True,
+        )
+    with col_d2:
+        pdf_data = ConradNotebookCompiler.to_pdf_bytes(
+            "Matemática & Física",
+            st.session_state.messages,
+            session_artifacts,
+        )
+        st.download_button(
+            "📄 Baixar Caderno (.pdf)",
+            data=pdf_data,
+            file_name="caderno_conrad.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+        )
+
+
+# ==============================================================================
+# --- SIDEBAR: MODOS, PERFIL COGNITIVO, BYOK & TERMÔMETRO DE RETENÇÃO ---
+# ==============================================================================
+with st.sidebar:
+    st.markdown(
+        f"<div style='display:flex;align-items:center;gap:8px;'>{CONRAD_AVATAR_SVG} <h3 style='margin:0;'>Configurações</h3></div>",
+        unsafe_allow_html=True,
+    )
+    st.caption("Personalize o modo didático, motor cognitivo e sua chave de acesso.")
+
+    # 1. Seletor de Modo Pedagógico Especializado
+    modo_selecionado = st.selectbox(
+        "🎯 Modo Pedagógico",
+        options=list(PEDAGOGICAL_MODES.keys()),
+        index=list(PEDAGOGICAL_MODES.keys()).index(st.session_state.current_mode),
+        format_func=lambda k: PEDAGOGICAL_MODES[k]["nome"],
+        help="Altere o estilo de tutoria do Conrad conforme seu objetivo de estudo.",
+    )
+    if st.session_state.get("current_mode") != modo_selecionado:
+        st.session_state.current_mode = modo_selecionado
+        st.session_state.engine.set_pedagogical_mode(modo_selecionado)
+        st.toast(f"Modo alterado para {PEDAGOGICAL_MODES[modo_selecionado]['nome']}!", icon="🎩")
+    st.caption(f"ℹ️ {PEDAGOGICAL_MODES[modo_selecionado]['descricao']}")
+
+    # 2. Seletor de Modelos Definitivos
+    selected_label = st.selectbox(
+        "🤖 Modelo de IA (Estáveis)",
+        options=list(DEFINITIVE_MODELS.keys()),
+        index=list(DEFINITIVE_MODELS.keys()).index(st.session_state.selected_model_label),
+    )
+    selected_model_id = DEFINITIVE_MODELS[selected_label]
+    if selected_model_id != st.session_state.engine.model_name:
+        st.session_state.selected_model_label = selected_label
+        st.session_state.engine.set_model(selected_model_id)
+        st.toast(f"Modelo alterado para {selected_model_id}!", icon="🎩")
+
+    # 3. Memória Pedagógica Persistente (Perfil Cognitivo)
+    with st.expander("🧠 Seu Perfil de Aprendizado (O que o Conrad já aprendeu sobre você)", expanded=False):
+        st.markdown(
+            f"**✅ Pontos Fortes:** {cognitive_profile['strengths']}\n\n"
+            f"**🎯 Em Evolução:** {cognitive_profile['difficulties']}\n\n"
+            f"**🎨 Estilo Preferido:** {cognitive_profile['learning_style']}\n\n"
+            f"**📝 Notas do Tutor:** *{cognitive_profile['pedagogical_notes']}*"
+        )
+        new_strengths = st.text_input("Atualizar Pontos Fortes:", value=cognitive_profile["strengths"])
+        new_difficulties = st.text_input("Atualizar Temas em Evolução:", value=cognitive_profile["difficulties"])
+        new_style = st.text_input("Estilo de Aprendizado:", value=cognitive_profile["learning_style"])
+        if st.button("💾 Atualizar Perfil Cognitivo", use_container_width=True):
+            _save_cognitive_profile(
+                strengths=new_strengths,
+                difficulties=new_difficulties,
+                learning_style=new_style,
+                pedagogical_notes=cognitive_profile["pedagogical_notes"],
+            )
+            st.success("Perfil cognitivo salvo no banco de dados!")
+            st.rerun()
+
+    st.divider()
+
+    # 4. Gerenciamento da API Key (BYOK)
+    st.subheader("🔑 Chave da API Gemini (BYOK)")
+    api_key_input = st.text_input(
+        "Insira sua chave do Google AI Studio:",
+        value=st.session_state.engine.api_key or "",
+        type="password",
+        placeholder="AIzaSy...",
+    )
+
+    if st.button("Salvar e Validar Chave", use_container_width=True, type="primary"):
+        st.session_state.engine.set_api_key(api_key_input)
+        with st.spinner("Validando chave junto à API do Google Gemini..."):
+            if st.session_state.engine.validate_api_key():
+                st.success("✅ Chave válida e ativa!")
+            else:
+                st.error("❌ Chave inválida. Verifique os caracteres.")
+
+    if st.session_state.engine.api_key:
+        st.caption("🟢 Status: Chave configurada na sessão.")
+    else:
+        st.caption("🟠 Status: Aguardando configuração de chave.")
+
+    # 5. Tutorial Visual Expansível
+    with st.expander("📘 Como Obter sua Chave Gratuita", expanded=not bool(st.session_state.engine.api_key)):
+        st.markdown(
+            """
+            1. **Acesse o portal oficial:** Clique em [Google AI Studio](https://aistudio.google.com/app/apikey) e faça login com sua conta Google.
+            2. **Gere a chave:** Clique no botão azul **"Create API Key"**.
+            3. **Ative no Conrad:** Copie o código gerado (`AIza...`), cole no campo acima e clique em **"Salvar e Validar Chave"**.
+
+            💡 *Dica: O Google oferece uma cota **100% gratuita** e generosa para estudantes, professores e uso pessoal!*
+            """
+        )
+
+    st.divider()
+
+    # 6. Termômetro de Retenção Cognitiva
+    stats = CognitiveRetentionTracker.evaluate_session(st.session_state.messages)
+    st.markdown("### 🌡️ Termômetro de Retenção")
+    st.progress(stats["score"] / 100)
+    st.caption(f"**Nível:** {stats['status']}\n\n*{stats['feedback']}*")
+
+    st.divider()
+
+    # 7. Métricas de Tokens e Utilitários de Sessão
+    st.subheader("📊 Métricas & Utilitários")
+    current_tokens = st.session_state.engine.count_tokens()
+    st.markdown(
+        f"<div class='token-badge'><b>Tokens na Sessão:</b> {current_tokens:,} / 1.048.576</div>",
+        unsafe_allow_html=True,
+    )
+
+    if st.button("🔄 Nova Conversa", use_container_width=True):
+        st.session_state.messages = []
+        st.session_state.active_artifact = None
+        if st.session_state.engine.api_key:
+            st.session_state.engine._init_chat()
+        st.rerun()

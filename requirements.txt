@@ -11,3 +11,4 @@ sqlalchemy>=2.0.0
 streamlit>=1.32.0
 sse-starlette>=2.0.0
 pydantic>=2.6.0
+reportlab>=4.0.0

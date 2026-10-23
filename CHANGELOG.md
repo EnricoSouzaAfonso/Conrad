@@ -5,6 +5,14 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [2.5.0] - 23/10/2026
+
+### Adicionado
+- **Compilador do Caderno Digital de Estudos (`src/conrad_report.py`, `app.py`):** Implementação da classe `ConradNotebookCompiler` com geração de material estruturado contendo todos os artifacts do Quadro Negro, síntese do diálogo e Flashcards de revisão, exportável em Markdown (`caderno_conrad.md`) e PDF diagramado via ReportLab (`caderno_conrad.pdf`).
+- **Termômetro de Retenção Cognitiva (`src/conrad_analytics.py`, `app.py`):** Módulo `CognitiveRetentionTracker` que avalia em tempo real o índice de autonomia e retenção cognitiva do aluno (*Iniciando*, *Em Construção*, *Boa Compreensão* e *Excelente Autonomia*), exibindo barra de progresso e diagnóstico formativo no menu lateral.
+- **Folha de Estilo de Impressão (`app.py`):** Regras CSS `@media print` para impressão limpa da sessão de estudos (`Ctrl+P`).
+- **Suíte de Testes do Caderno e Analytics (`tests/test_caderno_and_analytics.py`):** Validação automatizada da geração de Markdown/PDF e cálculo das faixas do Termômetro de Retenção.
+
 ## [2.4.0] - 23/10/2026
 
 ### Adicionado
