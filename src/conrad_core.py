@@ -97,6 +97,19 @@ class ConradEngine:
         except Exception as e:
             raise RuntimeError(f"Erro na comunicação com a API Gemini: {str(e)}")
 
+    def send_message_stream(self, prompt: str):
+        """Envia mensagem e gera chunks de texto em streaming (tempo real)."""
+        if not self.chat:
+            raise RuntimeError("Sessão de chat não inicializada.")
+        
+        try:
+            response_stream = self.chat.send_message_stream(prompt)
+            for chunk in response_stream:
+                if chunk.text:
+                    yield chunk.text
+        except Exception as e:
+            yield f"(Erro no streaming: {str(e)})"
+
     def count_tokens(self, contents=None) -> int:
         """Calcula o consumo de tokens atual via client.models.count_tokens."""
         try:

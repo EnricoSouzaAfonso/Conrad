@@ -5,6 +5,15 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [2.0.0] - 23/10/2026
+
+### Adicionado
+- **Camada de Persistência Relacional (`src/database.py`):** Modelagem ORM com SQLAlchemy (`StudentUser`, `ChatSessionDB`, `ChatMessageDB`) e banco SQLite/PostgreSQL (`conrad_data.db`).
+- **Suporte a Streaming em Tempo Real (`src/conrad_core.py`):** Método `send_message_stream()` no `ConradEngine` para geração progressiva de respostas.
+- **API Backend Comercial (`src/api.py`):** Serviço FastAPI com suporte a CORS, documentação automática OpenAPI (`/docs`), criação de sessões (`POST /api/sessions`) e streaming via Server-Sent Events (`POST /api/chat/stream`).
+- **Aplicação Web Autônoma (`app.py`):** Frontend independente em Streamlit com Dark Mode, MathJax v3 e streaming interativo.
+- **Infraestrutura de Containerização (`Dockerfile` e `docker-compose.yml`):** Empacotamento completo para deploy em nuvem.
+
 ## [1.6.2-dev] - 23/10/2026
 
 ### Adicionado

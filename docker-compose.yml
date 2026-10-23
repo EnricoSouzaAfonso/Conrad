@@ -1,0 +1,25 @@
+version: "3.9"
+
+services:
+  conrad-api:
+    build: .
+    container_name: conrad-api
+    command: uvicorn src.api:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - DATABASE_URL=sqlite:///./conrad_data.db
+    volumes:
+      - .:/app
+
+  conrad-web:
+    build: .
+    container_name: conrad-web
+    command: streamlit run app.py --server.port=8501 --server.address=0.0.0.0
+    ports:
+      - "8501:8501"
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+    depends_on:
+      - conrad-api
