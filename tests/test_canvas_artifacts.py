@@ -6,7 +6,7 @@ from src.conrad_persona import get_system_instruction, CONRAD_VERSION
 class TestCanvasArtifacts(unittest.TestCase):
     def test_persona_possui_protocolo_quadro_negro(self):
         instruction = get_system_instruction()
-        self.assertIn(CONRAD_VERSION, ("2.2.0", "2.3.0", "2.4.0", "2.5.0"))
+        self.assertIn(CONRAD_VERSION, ("2.2.0", "2.3.0", "2.4.0", "2.5.0", "2.6.0", "2.6.1", "2.6.2"))
         self.assertIn("O QUADRO NEGRO DO CONRAD (PROTOCOL DE ARTIFACTS / CANVAS)", instruction)
         self.assertIn('<conrad_artifact type="math|code|mermaid|summary"', instruction)
 

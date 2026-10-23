@@ -1,10 +1,10 @@
 """
 Módulo de Gerenciamento do Canvas e Artifacts do Conrad.
-Responsável pelo parsing, extração e estruturação de blocos <conrad_artifact>
+Responsável pelo parsing, extração, sanitização matemática e estruturação de blocos <conrad_artifact>
 e separação entre diálogo conversacional socrático e conteúdo denso da lousa.
 """
 import re
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 
 class ConradArtifact:
@@ -15,7 +15,22 @@ class ConradArtifact:
     def __init__(self, artifact_type: str, title: str, content: str):
         self.type = (artifact_type or "summary").strip().lower()
         self.title = (title or "Quadro Negro").strip()
-        self.content = (content or "").strip()
+        raw_content = (content or "").strip()
+        self.content = self._sanitize_math(raw_content) if self.type == "math" else raw_content
+
+    @staticmethod
+    def _sanitize_math(text: str) -> str:
+        """
+        Garante integridade de blocos matemáticos (LaTeX/MathJax/KaTeX) dentro da lousa.
+        Normaliza delimitadores \\[...\\] para $$...$$ e envolve fórmulas LaTeX puras sem cifrão.
+        """
+        if not text:
+            return ""
+        cleaned = re.sub(r"\\\[(.*?)\\\]", lambda m: f"$${m.group(1).strip()}$$", text, flags=re.DOTALL)
+        cleaned = re.sub(r"\\\((.*?)\\\)", lambda m: f"${m.group(1).strip()}$", cleaned, flags=re.DOTALL)
+        if "$" not in cleaned and any(tok in cleaned for tok in ("\\", "=", "^", "_")):
+            cleaned = f"$${cleaned}$$"
+        return cleaned
 
     def to_dict(self) -> Dict[str, str]:
         """Serializa o artefato para armazenamento em sessão ou histórico."""

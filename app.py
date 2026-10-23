@@ -1,11 +1,12 @@
 """
-Interface Web Autônoma do Conrad — Versão 2.5.0
-Caderno Digital de Estudos (Exportação MD/PDF), Termômetro de Retenção Cognitiva,
-Memória Pedagógica Persistente, Upload Multimodal (Fotos & PDFs),
-Modos Pedagógicos Especializados, Pensamento Socrático Visível (CoT) e Conrad Canvas Split-View.
+Interface Web Autônoma do Conrad — Versão 2.6.2
+Engenharia de QA, Validação Canônica de API Key (Zero Falso-Positivo),
+Streaming Throttled (40ms / 25fps), Encapsulamento Estrito do Quadro Negro (st.container(border=True))
+e Layout Sticky Bottom para a Área de Perguntas.
 """
 import os
 import re
+import time
 import html
 import streamlit as st
 from src.conrad_core import ConradEngine, DEFINITIVE_MODELS, DEFAULT_MODEL_NAME
@@ -26,26 +27,44 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# CSS para Dark Mode, Estilização do Quadro Negro (Split-View) e Impressão Limpa (@media print)
+# CSS para Dark Mode, Layout Sticky Bottom, Scroll Independente (css-layout) e Moldura do Quadro Negro
 st.markdown(
     """
 <style>
   .stApp { background-color: #121212; color: #e0e0e0; }
   .stChatMessage { border-radius: 8px; margin-bottom: 10px; }
-  .canvas-container {
-      background-color: #1a1a1a;
-      border: 1px solid #333333;
-      border-radius: 12px;
-      padding: 18px;
-      min-height: 520px;
+
+  /* Contêiner de mensagens com scroll independente e estabilidade */
+  .chat-scroll-area,
+  .st-key-chat_scroll_area {
+      max-height: calc(100dvh - 220px);
+      overflow-y: auto;
+      scrollbar-gutter: stable;
+      overscroll-behavior: contain;
+      padding-right: 8px;
+      margin-bottom: 16px;
   }
-  .canvas-header {
-      border-bottom: 2px solid #C59B27;
-      padding-bottom: 8px;
-      margin-bottom: 14px;
-      font-weight: 600;
-      color: #f5f5f5;
+
+  /* Barra de perguntas fixa no rodapé com efeito vidro (glassmorphism) */
+  .stChatInput,
+  div[data-testid="stChatInput"] {
+      position: sticky !important;
+      bottom: 0 !important;
+      z-index: 999 !important;
+      background: rgba(18, 18, 18, 0.85) !important;
+      backdrop-filter: blur(12px) !important;
+      -webkit-backdrop-filter: blur(12px) !important;
+      padding-top: 10px !important;
+      padding-bottom: 10px !important;
   }
+
+  /* Estilização elegante da moldura do Quadro Negro */
+  div[data-testid="stVerticalBlockBorderWrapper"] {
+      background-color: #161616 !important;
+      border: 1px solid #333333 !important;
+      border-radius: 10px !important;
+  }
+
   .token-badge {
       background-color: #2b2b2b;
       border: 1px solid #444;
@@ -54,6 +73,7 @@ st.markdown(
       font-size: 0.85rem;
       margin-bottom: 10px;
   }
+
   @media print {
       header, footer, [data-testid="stSidebar"], .stChatInput { display: none !important; }
       .stApp { background: white !important; color: black !important; }
@@ -165,6 +185,17 @@ def _clean_code_or_mermaid_fence(content: str, expected_lang: str = "") -> str:
     return stripped
 
 
+def _format_math_for_canvas(content: str) -> str:
+    """Garante que blocos $$...$$ possuam quebras de linha duplas para renderização em destaque no Quadro Negro."""
+    formatted = re.sub(
+        r"\$\$\s*(.*?)\s*\$\$",
+        lambda m: f"\n\n$$\n{m.group(1).strip()}\n$$\n\n",
+        content.strip(),
+        flags=re.DOTALL,
+    )
+    return re.sub(r"\n{3,}", "\n\n", formatted).strip()
+
+
 # ==============================================================================
 # --- SIDEBAR: MODOS, PERFIL COGNITIVO, BYOK & TERMÔMETRO DE RETENÇÃO ---
 # ==============================================================================
@@ -245,7 +276,7 @@ with st.sidebar:
                     pass
                 st.success("✅ Chave válida e ativa!")
             else:
-                st.error("❌ Chave inválida. Verifique os caracteres.")
+                st.error("❌ Chave inválida ou não autorizada.")
 
     if st.session_state.engine.api_key:
         st.caption("🟢 Status: Chave configurada na sessão.")
@@ -290,16 +321,18 @@ with col_chat:
         f"Modo: **{PEDAGOGICAL_MODES[st.session_state.current_mode]['nome']}** | Modelo: `{st.session_state.engine.model_name}`"
     )
 
-    # Renderização das mensagens de chat (apenas diálogo limpo + miniatura de mídia + CoT expansível)
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"], avatar="🎩" if msg["role"] == "assistant" else None):
-            if msg["role"] == "assistant" and msg.get("show_cot", False):
-                _render_cot_details(msg.get("thought") or "")
-            if msg.get("media_bytes") and msg.get("mime_type", "").startswith("image/"):
-                st.image(msg["media_bytes"], width=220)
-            elif msg.get("media_name"):
-                st.caption(f"📄 Arquivo anexado: `{msg['media_name']}`")
-            st.markdown(msg["content"])
+    # Contêiner de mensagens com rolagem independente (.st-key-chat_scroll_area / .chat-scroll-area)
+    chat_scroll_container = st.container(key="chat_scroll_area")
+    with chat_scroll_container:
+        for msg in st.session_state.messages:
+            with st.chat_message(msg["role"], avatar="🎩" if msg["role"] == "assistant" else None):
+                if msg["role"] == "assistant" and msg.get("show_cot", False):
+                    _render_cot_details(msg.get("thought") or "")
+                if msg.get("media_bytes") and msg.get("mime_type", "").startswith("image/"):
+                    st.image(msg["media_bytes"], width=220)
+                elif msg.get("media_name"):
+                    st.caption(f"📄 Arquivo anexado: `{msg['media_name']}`")
+                st.markdown(msg["content"])
 
     # Widget Multimodal de Upload de Fotos de Caderno e PDFs de Listas
     uploaded_file = st.file_uploader(
@@ -308,7 +341,7 @@ with col_chat:
         key="study_media_uploader",
     )
 
-    # Input do aluno
+    # Input do aluno (fixado no rodapé via CSS position: sticky)
     if prompt := st.chat_input("Como posso ajudar seus estudos hoje? (digite 'fim' para encerrar)"):
         media_bytes = None
         mime_type = None
@@ -329,90 +362,98 @@ with col_chat:
                 "media_name": media_name,
             }
         )
-        with st.chat_message("user"):
-            if media_bytes and mime_type and mime_type.startswith("image/"):
-                st.image(uploaded_file, width=220)
-            elif media_name:
-                st.caption(f"📄 Arquivo anexado: `{media_name}`")
-            st.markdown(prompt)
+        with chat_scroll_container:
+            with st.chat_message("user"):
+                if media_bytes and mime_type and mime_type.startswith("image/"):
+                    st.image(uploaded_file, width=220)
+                elif media_name:
+                    st.caption(f"📄 Arquivo anexado: `{media_name}`")
+                st.markdown(prompt)
 
-        with st.chat_message("assistant", avatar="🎩"):
-            # Caso 1: Ausência de API Key — Resposta pré-programada graciosa (Zero Crash)
-            if not st.session_state.engine.api_key:
-                missing_msg = get_missing_key_message()
-                st.markdown(missing_msg)
-                st.session_state.messages.append(
-                    {"role": "assistant", "content": missing_msg, "show_cot": False}
-                )
-            # Caso 2: Comando estrito de encerramento
-            elif prompt.strip() == "fim":
-                farewell_msg = (
-                    "Foi um prazer enorme explorar o conhecimento com você! "
-                    "Lembre-se de revisar os conceitos que discutimos hoje para consolidar seu aprendizado. Até a próxima! 🎩"
-                )
-                st.markdown(farewell_msg)
-                st.session_state.messages.append(
-                    {"role": "assistant", "content": farewell_msg, "show_cot": False}
-                )
-            # Caso 3: Envio Multimodal ou Streaming com Memória Cognitiva + Extração de Artifacts
-            else:
-                cot_slot = st.empty()
-                with cot_slot.container():
-                    _render_cot_details()
-
-                memory_summary = (
-                    f"Pontos fortes: {cognitive_profile['strengths']} | "
-                    f"Dificuldades em evolução: {cognitive_profile['difficulties']} | "
-                    f"Estilo de aprendizado: {cognitive_profile['learning_style']} | "
-                    f"Notas: {cognitive_profile['pedagogical_notes']}"
-                )
-                memory_prefix = st.session_state.engine.build_context_with_memory(memory_summary)
-
-                response_placeholder = st.empty()
-                full_text = ""
-
-                if media_bytes and mime_type:
-                    multimodal_prompt = (
-                        f"{memory_prefix}"
-                        "Transcreva o enunciado ou equação deste material para o Quadro Negro usando "
-                        '<conrad_artifact type="math" title="Enunciado Transcrito"> (ou o tipo mais adequado) '
-                        "e comece guiando o estudante com uma pergunta indutiva sobre o primeiro passo.\n\n"
-                        f"Mensagem do estudante: {prompt}"
+            with st.chat_message("assistant", avatar="🎩"):
+                # Caso 1: Ausência de API Key — Resposta pré-programada graciosa (Zero Crash)
+                if not st.session_state.engine.api_key:
+                    missing_msg = get_missing_key_message()
+                    st.markdown(missing_msg)
+                    st.session_state.messages.append(
+                        {"role": "assistant", "content": missing_msg, "show_cot": False}
                     )
-                    with st.spinner("Analisando foto/documento anexado e preparando o Quadro Negro..."):
-                        full_text = st.session_state.engine.send_message_multimodal(
-                            prompt=multimodal_prompt,
-                            media_bytes=media_bytes,
-                            mime_type=mime_type,
-                        )
+                # Caso 2: Comando estrito de encerramento
+                elif prompt.strip() == "fim":
+                    farewell_msg = (
+                        "Foi um prazer enorme explorar o conhecimento com você! "
+                        "Lembre-se de revisar os conceitos que discutimos hoje para consolidar seu aprendizado. Até a próxima! 🎩"
+                    )
+                    st.markdown(farewell_msg)
+                    st.session_state.messages.append(
+                        {"role": "assistant", "content": farewell_msg, "show_cot": False}
+                    )
+                # Caso 3: Envio Multimodal ou Streaming Throttled (40ms) + Extração de Artifacts
                 else:
-                    contextual_prompt = f"{memory_prefix}{prompt}"
-                    for chunk in st.session_state.engine.send_message_stream(contextual_prompt):
-                        full_text += chunk
-                        preview_text, _ = CanvasParser.parse_message(full_text)
-                        response_placeholder.markdown(preview_text + "▌")
-
-                text_without_thought, extracted_thought = CanvasParser.parse_thought(full_text)
-                if extracted_thought:
+                    cot_slot = st.empty()
                     with cot_slot.container():
-                        _render_cot_details(extracted_thought)
+                        _render_cot_details()
 
-                clean_chat_text, artifact = CanvasParser.parse_message(text_without_thought)
-                response_placeholder.markdown(clean_chat_text)
+                    memory_summary = (
+                        f"Pontos fortes: {cognitive_profile['strengths']} | "
+                        f"Dificuldades em evolução: {cognitive_profile['difficulties']} | "
+                        f"Estilo de aprendizado: {cognitive_profile['learning_style']} | "
+                        f"Notas: {cognitive_profile['pedagogical_notes']}"
+                    )
+                    memory_prefix = st.session_state.engine.build_context_with_memory(memory_summary)
 
-                if artifact:
-                    st.session_state.active_artifact = artifact
+                    response_placeholder = st.empty()
+                    full_text = ""
 
-                st.session_state.messages.append(
-                    {
-                        "role": "assistant",
-                        "content": clean_chat_text,
-                        "show_cot": True,
-                        "thought": extracted_thought,
-                        "artifact": artifact,
-                    }
-                )
-                st.session_state.cached_tokens = st.session_state.engine.count_tokens()
+                    if media_bytes and mime_type:
+                        multimodal_prompt = (
+                            f"{memory_prefix}"
+                            "Transcreva o enunciado ou equação deste material para o Quadro Negro usando "
+                            '<conrad_artifact type="math" title="Enunciado Transcrito"> (ou o tipo mais adequado) '
+                            "e comece guiando o estudante com uma pergunta indutiva sobre o primeiro passo.\n\n"
+                            f"Mensagem do estudante: {prompt}"
+                        )
+                        with st.spinner("Analisando foto/documento anexado e preparando o Quadro Negro..."):
+                            full_text = st.session_state.engine.send_message_multimodal(
+                                prompt=multimodal_prompt,
+                                media_bytes=media_bytes,
+                                mime_type=mime_type,
+                            )
+                    else:
+                        contextual_prompt = f"{memory_prefix}{prompt}"
+                        last_render_time = time.time()
+                        RENDER_THROTTLE_SECONDS = 0.04  # Atualiza a tela a cada 40ms (~25 fps), suave e ultra-rápido
+
+                        for chunk in st.session_state.engine.send_message_stream(contextual_prompt):
+                            full_text += chunk
+                            now = time.time()
+                            if now - last_render_time > RENDER_THROTTLE_SECONDS:
+                                # Apenas durante a geração: preview simples sem regex pesado a cada caractere
+                                response_placeholder.markdown(full_text + "▌")
+                                last_render_time = now
+
+                    # Ao terminar o streaming: executa o parse final completo de uma única vez
+                    text_without_thought, extracted_thought = CanvasParser.parse_thought(full_text)
+                    if extracted_thought:
+                        with cot_slot.container():
+                            _render_cot_details(extracted_thought)
+
+                    clean_chat_text, artifact = CanvasParser.parse_message(text_without_thought)
+                    response_placeholder.markdown(clean_chat_text)
+
+                    if artifact:
+                        st.session_state.active_artifact = artifact
+
+                    st.session_state.messages.append(
+                        {
+                            "role": "assistant",
+                            "content": clean_chat_text,
+                            "show_cot": True,
+                            "thought": extracted_thought,
+                            "artifact": artifact,
+                        }
+                    )
+                    st.session_state.cached_tokens = st.session_state.engine.count_tokens()
 
 # Atualiza o Termômetro de Retenção e Contador de Tokens na Sidebar sem bloquear o carregamento inicial
 with stats_placeholder.container():
@@ -433,30 +474,37 @@ session_artifacts = _collect_session_artifacts()
 
 with col_canvas:
     st.subheader("📐 Quadro Negro do Conrad")
-    with st.container():
-        st.markdown('<div class="canvas-container">', unsafe_allow_html=True)
+
+    # Contêiner nativo com borda integrada — conteúdo 100% encapsulado
+    canvas_card = st.container(border=True)
+    with canvas_card:
         if st.session_state.active_artifact:
             art = st.session_state.active_artifact
+            # Cabeçalho da Lousa com Badge
             st.markdown(
-                f'<div class="canvas-header">📌 {art.title} ({art.type.upper()})</div>',
+                f"""
+                <div style="border-bottom: 2px solid #C59B27; padding-bottom: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 15px; font-weight: bold; color: #f5f5f5;">📌 {art.title}</span>
+                    <span style="background: #2A2A2A; border: 1px solid #444; font-size: 11px; padding: 2px 8px; border-radius: 4px; color: #C59B27;">{art.type.upper()}</span>
+                </div>
+                """,
                 unsafe_allow_html=True,
             )
 
+            # Renderização interna estritamente DENTRO do container
             if art.type == "math":
-                st.markdown(art.content)
+                st.markdown(_format_math_for_canvas(art.content))
             elif art.type == "code":
                 st.code(_clean_code_or_mermaid_fence(art.content))
             elif art.type == "mermaid":
-                # Renderiza diagrama Mermaid nativo
                 clean_mermaid = _clean_code_or_mermaid_fence(art.content, "mermaid")
                 st.markdown(f"```mermaid\n{clean_mermaid}\n```")
             else:
                 st.markdown(art.content)
         else:
             st.info(
-                "O Quadro Negro está limpo. Conforme o Conrad apresentar fórmulas, diagramas ou códigos, eles aparecerão aqui automaticamente!"
+                "🎩 **O Quadro Negro está limpo.** Conforme você conversar com o Conrad sobre matemática, física ou programação, as fórmulas, diagramas e códigos aparecerão aqui dentro automaticamente!"
             )
-        st.markdown("</div>", unsafe_allow_html=True)
 
     # Botões de Exportação do Caderno Digital no Rodapé do Canvas
     col_d1, col_d2 = st.columns(2)
