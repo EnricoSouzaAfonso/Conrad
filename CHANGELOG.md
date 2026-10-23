@@ -5,6 +5,15 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [1.6.2-dev] - 23/10/2026
+
+### Adicionado
+- **Ativo Vetorial da Cartola (`src/assets/conrad_avatar.py`):** Isolamento da constante `CONRAD_AVATAR_SVG` com o ícone vetorial otimizado do Conrad (🎩).
+- **Módulo de Interface Interativa (`src/conrad_ui.py`):** Implementação da classe `ConradChatUI` com injeção dinâmica de MathJax v3 (`tex-svg.js`), mapeamento dinâmico de extensões/MIME via Pygments, botões interativos de Copiar e Baixar blocos de código, suporte a `Enter`/`Shift+Enter` e encerramento estrito por `"fim"`.
+
+### Alterado
+- **Simplificação Drástica da Célula 4 (`Conrad.ipynb`):** Redução da Célula 4 para inicialização enxuta (`ui = ConradChatUI(engine=engine); ui.render()`).
+
 ## [1.6.1-dev] - 22/10/2026
 
 ### Adicionado
