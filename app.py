@@ -1,12 +1,13 @@
 """
-Interface Web Autônoma do Conrad — Versão 2.2.0
-Split-View com Quadro Negro Interativo (Conrad Canvas / Artifacts),
-Pensamento Pedagógico Visível (CoT), Mermaid Nativo, Gemini 3.8 Flash e Onboarding BYOK.
+Interface Web Autônoma do Conrad — Versão 2.3.0
+Modos Pedagógicos Especializados, Pensamento Socrático Visível (CoT),
+Split-View com Quadro Negro Interativo (Conrad Canvas), Mermaid Nativo, Gemini 3.8 Flash e Onboarding BYOK.
 """
 import re
+import html
 import streamlit as st
 from src.conrad_core import ConradEngine, DEFINITIVE_MODELS, DEFAULT_MODEL_NAME
-from src.conrad_persona import get_missing_key_message
+from src.conrad_persona import get_missing_key_message, PEDAGOGICAL_MODES
 from src.conrad_canvas import CanvasParser
 from src.assets.conrad_avatar import CONRAD_AVATAR_SVG
 
@@ -71,8 +72,32 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "selected_model_label" not in st.session_state:
     st.session_state.selected_model_label = list(DEFINITIVE_MODELS.keys())[0]
+if "current_mode" not in st.session_state:
+    st.session_state.current_mode = "socratico"
 if "active_artifact" not in st.session_state:
     st.session_state.active_artifact = None
+
+
+def _render_cot_details(thought_text: str = ""):
+    """Renderiza o bloco expansível de CoT com elementos nativos <details> e <summary>."""
+    default_cot = (
+        "Estratégia ativada: Diagnóstico socrático prévio. "
+        "As pistas foram calibradas para provocar reflexão autônoma sem entregar a conclusão pronta."
+    )
+    safe_thought = html.escape(thought_text.strip()) if thought_text else default_cot
+    st.markdown(
+        f"""
+<details style="background: #252525; padding: 8px 12px; border-radius: 6px; margin-bottom: 8px; border-left: 3px solid #C59B27;">
+  <summary style="cursor: pointer; font-size: 12px; font-weight: 600; color: #ddd;">
+    🧠 Raciocínio Pedagógico do Conrad
+  </summary>
+  <div style="font-size: 11px; color: #bbb; margin-top: 6px; line-height: 1.4;">
+    {safe_thought}
+  </div>
+</details>
+""",
+        unsafe_allow_html=True,
+    )
 
 
 def _clean_code_or_mermaid_fence(content: str, expected_lang: str = "") -> str:
@@ -90,6 +115,7 @@ def _format_study_summary_markdown(messages) -> str:
     lines = [
         "# 🎩 Resumo de Estudos — Sessão com o Conrad",
         f"**Modelo utilizado:** `{st.session_state.engine.model_name}`",
+        f"**Modo Pedagógico:** `{PEDAGOGICAL_MODES[st.session_state.current_mode]['nome']}`",
         "",
         "---",
         "",
@@ -108,16 +134,30 @@ def _format_study_summary_markdown(messages) -> str:
 
 
 # ==============================================================================
-# --- SIDEBAR: SELETOR DE MODELOS, ONBOARDING BYOK & UTILITÁRIOS ---
+# --- SIDEBAR: MODOS PEDAGÓGICOS, MODELOS, ONBOARDING BYOK & UTILITÁRIOS ---
 # ==============================================================================
 with st.sidebar:
     st.markdown(
         f"<div style='display:flex;align-items:center;gap:8px;'>{CONRAD_AVATAR_SVG} <h3 style='margin:0;'>Configurações</h3></div>",
         unsafe_allow_html=True,
     )
-    st.caption("Personalize o motor cognitivo e sua chave de acesso.")
+    st.caption("Personalize o modo didático, motor cognitivo e sua chave de acesso.")
 
-    # 1. Seletor de Modelos Definitivos
+    # 1. Seletor de Modo Pedagógico Especializado
+    modo_selecionado = st.selectbox(
+        "🎯 Modo Pedagógico",
+        options=list(PEDAGOGICAL_MODES.keys()),
+        index=list(PEDAGOGICAL_MODES.keys()).index(st.session_state.current_mode),
+        format_func=lambda k: PEDAGOGICAL_MODES[k]["nome"],
+        help="Altere o estilo de tutoria do Conrad conforme seu objetivo de estudo.",
+    )
+    if st.session_state.get("current_mode") != modo_selecionado:
+        st.session_state.current_mode = modo_selecionado
+        st.session_state.engine.set_pedagogical_mode(modo_selecionado)
+        st.toast(f"Modo alterado para {PEDAGOGICAL_MODES[modo_selecionado]['nome']}!", icon="🎩")
+    st.caption(f"ℹ️ {PEDAGOGICAL_MODES[modo_selecionado]['descricao']}")
+
+    # 2. Seletor de Modelos Definitivos
     selected_label = st.selectbox(
         "🤖 Modelo de IA (Estáveis)",
         options=list(DEFINITIVE_MODELS.keys()),
@@ -131,7 +171,7 @@ with st.sidebar:
 
     st.divider()
 
-    # 2. Gerenciamento da API Key (BYOK)
+    # 3. Gerenciamento da API Key (BYOK)
     st.subheader("🔑 Chave da API Gemini (BYOK)")
     api_key_input = st.text_input(
         "Insira sua chave do Google AI Studio:",
@@ -153,7 +193,7 @@ with st.sidebar:
     else:
         st.caption("🟠 Status: Aguardando configuração de chave.")
 
-    # 3. Tutorial Visual Expansível
+    # 4. Tutorial Visual Expansível
     with st.expander("📘 Como Obter sua Chave Gratuita", expanded=not bool(st.session_state.engine.api_key)):
         st.markdown(
             """
@@ -167,7 +207,7 @@ with st.sidebar:
 
     st.divider()
 
-    # 4. Métricas de Tokens e Utilitários de Sessão
+    # 5. Métricas de Tokens e Utilitários de Sessão
     st.subheader("📊 Métricas & Utilitários")
     current_tokens = st.session_state.engine.count_tokens()
     st.markdown(
@@ -198,17 +238,15 @@ col_chat, col_canvas = st.columns([1.1, 0.9], gap="medium")
 
 with col_chat:
     st.subheader("🎩 Diálogo com Conrad")
-    st.caption(f"Tutor Socrático & Construtivista | Modelo ativo: `{st.session_state.engine.model_name}`")
+    st.caption(
+        f"Modo: **{PEDAGOGICAL_MODES[st.session_state.current_mode]['nome']}** | Modelo: `{st.session_state.engine.model_name}`"
+    )
 
-    # Renderização das mensagens de chat (apenas diálogo limpo + CoT expansível)
+    # Renderização das mensagens de chat (apenas diálogo limpo + CoT expansível em <details>)
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"], avatar="🎩" if msg["role"] == "assistant" else None):
             if msg["role"] == "assistant" and msg.get("show_cot", False):
-                with st.expander("🧠 Raciocínio Pedagógico do Conrad (Estratégia Socrática)", expanded=False):
-                    st.caption(
-                        msg.get("thought")
-                        or "O Conrad avaliou o nível conceitual da sua dúvida e selecionou pistas indutivas em vez de respostas prontas."
-                    )
+                _render_cot_details(msg.get("thought") or "")
             st.markdown(msg["content"])
 
     # Input do aluno
@@ -235,13 +273,11 @@ with col_chat:
                 st.session_state.messages.append(
                     {"role": "assistant", "content": farewell_msg, "show_cot": False}
                 )
-            # Caso 3: Streaming em tempo real + Extração de Artifacts para o Quadro Negro
+            # Caso 3: Streaming em tempo real + CoT Visível + Extração de Artifacts para o Quadro Negro
             else:
-                with st.expander("🧠 Raciocínio Pedagógico do Conrad (Estratégia Socrática)", expanded=False):
-                    cot_placeholder = st.empty()
-                    cot_placeholder.caption(
-                        "O Conrad avaliou o nível conceitual da sua dúvida e selecionou pistas indutivas em vez de respostas prontas."
-                    )
+                cot_slot = st.empty()
+                with cot_slot.container():
+                    _render_cot_details()
 
                 response_placeholder = st.empty()
                 full_text = ""
@@ -252,7 +288,8 @@ with col_chat:
 
                 text_without_thought, extracted_thought = CanvasParser.parse_thought(full_text)
                 if extracted_thought:
-                    cot_placeholder.caption(extracted_thought)
+                    with cot_slot.container():
+                        _render_cot_details(extracted_thought)
 
                 clean_chat_text, artifact = CanvasParser.parse_message(text_without_thought)
                 response_placeholder.markdown(clean_chat_text)

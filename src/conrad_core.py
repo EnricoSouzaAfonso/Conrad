@@ -3,7 +3,11 @@ import html
 from typing import Optional
 from google import genai
 from google.genai import types
-from src.conrad_persona import get_system_instruction, get_missing_key_message
+from src.conrad_persona import (
+    get_system_instruction,
+    get_missing_key_message,
+    PEDAGOGICAL_MODES,
+)
 
 # Lista oficial de modelos definitivos (sem previews temporários que expiram)
 DEFINITIVE_MODELS = {
@@ -22,11 +26,13 @@ class ConradEngine:
         self,
         api_key: Optional[str] = None,
         model_name: str = DEFAULT_MODEL_NAME,
-        system_instruction: Optional[str] = None
+        system_instruction: Optional[str] = None,
+        pedagogical_mode: str = "socratico",
     ):
         self.api_key = api_key if api_key is not None else self._resolve_api_key()
         self.model_name = model_name
-        self.system_instruction = system_instruction or get_system_instruction()
+        self.pedagogical_mode = pedagogical_mode if pedagogical_mode in PEDAGOGICAL_MODES else "socratico"
+        self.system_instruction = system_instruction or get_system_instruction(self.pedagogical_mode)
         self.client = None
         self.chat = None
 
@@ -74,6 +80,14 @@ class ConradEngine:
             if not self.client:
                 self.client = genai.Client(api_key=self.api_key)
             self._init_chat()
+
+    def set_pedagogical_mode(self, mode: str):
+        """Atualiza o modo pedagógico e reinicia a sessão de chat com a nova instrução."""
+        if mode in PEDAGOGICAL_MODES:
+            self.pedagogical_mode = mode
+            self.system_instruction = get_system_instruction(mode)
+            if self.client and self.api_key:
+                self._init_chat()
 
     def validate_api_key(self) -> bool:
         """Testa se a chave atual é válida realizando uma requisição mínima de teste."""
@@ -138,7 +152,7 @@ class ConradEngine:
         """Envia mensagem para a sessão ativa de chat e trata bloqueios, ausência de chave ou erros."""
         if not self.api_key or not self.chat:
             return get_missing_key_message()
-        
+
         try:
             try:
                 response = self.chat.send_message(prompt)
@@ -151,7 +165,7 @@ class ConradEngine:
 
             if response.text:
                 return response.text
-            
+
             # Tratamento de bloqueio por filtros de segurança
             block_reason = "Filtro de segurança ativado"
             if hasattr(response, "prompt_feedback") and response.prompt_feedback:
@@ -166,7 +180,7 @@ class ConradEngine:
         if not self.api_key or not self.chat:
             yield get_missing_key_message()
             return
-        
+
         try:
             try:
                 response_stream = self.chat.send_message_stream(prompt)
@@ -199,7 +213,7 @@ class ConradEngine:
                 except Exception:
                     res = self.client.models.count_tokens(model="gemini-2.5-flash", contents=history)
                 return getattr(res, "total_tokens", 0)
-            
+
             try:
                 res = self.client.models.count_tokens(model=self.model_name, contents=contents)
             except Exception:

@@ -5,6 +5,13 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [2.3.0] - 23/10/2026
+
+### Adicionado
+- **Modos Pedagógicos Especializados (`src/conrad_persona.py`, `src/conrad_core.py`, `app.py`):** Implementação do dicionário `PEDAGOGICAL_MODES` e método `set_pedagogical_mode()` com 4 abordagens didáticas selecionáveis em tempo real: *Socrático Puro*, *Simulado & Desafio (Banca)*, *Arquiteto de Software (Dev)* e *Intuitivo / Feynman (Iniciante)*.
+- **Pensamento Pedagógico Visível Nativo (`app.py`):** Renderização acessível de Chain of Thought (CoT) com elementos `<details>` e `<summary>` sem deslocamento de layout (*layout shift* zero).
+- **Suíte de Testes de Modos Pedagógicos (`tests/test_pedagogical_modes.py`):** Validação automatizada das diretrizes de todos os 4 modos e alternância dinâmica na sessão do `ConradEngine`.
+
 ## [2.2.0] - 23/10/2026
 
 ### Adicionado
