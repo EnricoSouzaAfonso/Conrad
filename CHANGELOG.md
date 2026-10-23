@@ -5,6 +5,17 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [1.6.1-dev] - 22/10/2026
+
+### Adicionado
+- **Módulo de Persona (`src/conrad_persona.py`):** Extração e consolidação das System Instructions (`SYSTEM_INSTRUCTION_CONRAD`), metadados de identidade e diretrizes pedagógicas socráticas e construtivistas.
+- **Blindagem Rigorosa de Renderização LaTeX / MathJax:** Regras estritas contra o bug de palavras coladas em modo inline (`$...$`), determinando equações em bloco (`$$...$$`), variáveis isoladas inline, uso de `\text{...}` e discriminação obrigatória de variáveis.
+- **Protocolo Não-Hostil de Precisão Factual (3 Passos):** Validação da intenção, correção suave baseada em consenso científico e contextualização histórica.
+- **Testes Automatizados (`tests/test_persona_and_rules.py`):** Suíte de validação das regras invioláveis, blindagem MathJax, protocolo de 3 passos e encerramento estrito.
+
+### Alterado
+- **Desacoplamento da Célula 4 (`Conrad.ipynb`) e `ConradEngine` (`src/conrad_core.py`):** Substituição do bloco monolítico de 540 linhas de System Instructions pela importação direta de `src.conrad_persona`.
+
 ## [1.6.0-dev] - 22/10/2026
 
 ### Adicionado

@@ -3,6 +3,7 @@ import html
 from typing import Optional
 from google import genai
 from google.genai import types
+from src.conrad_persona import get_system_instruction
 
 class ConradEngine:
     def __init__(
@@ -19,7 +20,7 @@ class ConradEngine:
             )
             
         self.model_name = model_name
-        self.system_instruction = system_instruction
+        self.system_instruction = system_instruction or get_system_instruction()
         self.client = genai.Client(api_key=self.api_key)
         self.chat = None
         self._init_chat()
