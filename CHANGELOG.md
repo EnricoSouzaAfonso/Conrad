@@ -5,6 +5,17 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [1.6.0-dev] - 22/10/2026
+
+### Adicionado
+- **Módulo Core Desacoplado (`src/conrad_core.py`):** Criação da classe `ConradEngine` para encapsular o cliente da API Gemini, gerenciamento de sessão de chat, contagem de tokens e tratamento de bloqueios de segurança (`safety_settings`).
+- **Autenticação Híbrida:** Suporte flexível tanto para Google Colab Secrets (`userdata`) quanto para variáveis de ambiente locais (`GEMINI_API_KEY` / `GOOGLE_API_KEY`).
+- **Padronização de Dependências (`requirements.txt`):** Adição do arquivo de dependências para permitir execução e testes em ambiente local ou servidor.
+
+### Alterado
+- **Migração para o Novo SDK Oficial (`google-genai` v1.x):** Substituição integral do pacote legado `google-generativeai` pelo novo SDK `google-genai`, utilizando `genai.Client`, `client.chats.create` e `types.GenerateContentConfig` com o modelo `gemini-2.5-flash`.
+- **Refatoração do Notebook (`Conrad.ipynb`):** Atualização das células de instalação, configuração, listagem de modelos e integração com o `ConradEngine`.
+
 ## [1.5.1] - 10/09/2025
 
 ### Corrigido

@@ -1,0 +1,7 @@
+google-genai>=1.0.0
+markdown2>=2.4.10
+beautifulsoup4>=4.12.0
+lxml>=5.0.0
+Pygments>=2.17.0
+ipywidgets>=8.0.0
+IPython>=8.0.0
