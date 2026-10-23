@@ -20,6 +20,17 @@ DEFINITIVE_MODELS = {
 
 DEFAULT_MODEL_NAME = "gemini-3.8-flash"
 
+# Mapeamento de roteamento ativo para evitar 503 (sobrecarga) ou 404 (modelos legados) no endpoint AI Studio
+RUNTIME_MODEL_MAP = {
+    "gemini-3.8-flash": "gemini-2.5-flash",
+    "gemini-2.5-flash": "gemini-2.5-flash",
+    "gemini-2.5-pro": "gemini-3.5-flash",
+    "gemini-1.5-flash": "gemini-2.5-flash",
+    "gemini-1.5-pro": "gemini-3.5-flash",
+}
+
+FALLBACK_MODELS = ("gemini-2.5-flash", "gemini-3.5-flash-lite", "gemini-3.5-flash")
+
 
 class ConradEngine:
     def __init__(
@@ -35,12 +46,18 @@ class ConradEngine:
         self.system_instruction = system_instruction or get_system_instruction(self.pedagogical_mode)
         self.client = None
         self.chat = None
+        self._active_runtime_model = self._get_runtime_model(self.model_name)
 
         if self.api_key:
             self._init_client_and_chat()
 
+    @staticmethod
+    def _get_runtime_model(model_name: str) -> str:
+        """Retorna o modelo efetivo de baixa latência disponível na API."""
+        return RUNTIME_MODEL_MAP.get(model_name, "gemini-2.5-flash")
+
     def _resolve_api_key(self) -> Optional[str]:
-        # 1. Checa variáveis de ambiente de sistema
+        # 1. Checa variáveis de ambiente de sistema (prioriza GEMINI_API_KEY)
         key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
         if key:
             return key
@@ -76,9 +93,10 @@ class ConradEngine:
     def set_model(self, model_name: str):
         """Altera o modelo e preserva as configurações do chat."""
         self.model_name = model_name
+        self._active_runtime_model = self._get_runtime_model(model_name)
         if self.api_key:
             if not self.client:
-                self.client = genai.Client(api_key=self.api_key)
+                self.client = self._create_client(self.api_key)
             self._init_chat()
 
     def set_pedagogical_mode(self, mode: str):
@@ -93,31 +111,42 @@ class ConradEngine:
         """Gera injeção de contexto com o histórico pedagógico do aluno."""
         return f"[HISTÓRICO PEDAGÓGICO DO ESTUDANTE]: {memory_notes}\n"
 
+    def _create_client(self, api_key: str):
+        """Cria instância do genai.Client com timeout curto e sem loop infinito de retry."""
+        try:
+            http_opts = types.HttpOptions(
+                timeout=15000,
+                retry_options=types.HttpRetryOptions(attempts=1),
+            )
+            return genai.Client(api_key=api_key, http_options=http_opts)
+        except Exception:
+            return genai.Client(api_key=api_key)
+
     def validate_api_key(self) -> bool:
-        """Testa se a chave atual é válida realizando uma requisição mínima de teste."""
+        """Testa se a chave atual é válida realizando uma requisição rápida sem bloqueio."""
         if not self.api_key:
             return False
         try:
-            test_client = genai.Client(api_key=self.api_key)
-            try:
-                test_res = test_client.models.generate_content(
-                    model=self.model_name,
-                    contents="ping"
-                )
-            except Exception as err:
-                if "404" in str(err) or "NOT_FOUND" in str(err):
+            test_client = self._create_client(self.api_key)
+            for candidate_model in FALLBACK_MODELS:
+                try:
                     test_res = test_client.models.generate_content(
-                        model="gemini-2.5-flash",
-                        contents="ping"
+                        model=candidate_model,
+                        contents="ping",
                     )
-                else:
-                    raise
-            return bool(test_res)
+                    if test_res:
+                        return True
+                except Exception as err:
+                    err_str = str(err).upper()
+                    if "API_KEY_INVALID" in err_str or "INVALID_ARGUMENT" in err_str or "400" in err_str or "403" in err_str:
+                        return False
+                    continue
+            return False
         except Exception:
             return False
 
     def _init_client_and_chat(self):
-        self.client = genai.Client(api_key=self.api_key)
+        self.client = self._create_client(self.api_key)
         self._init_chat()
 
     def _build_chat_config(self) -> types.GenerateContentConfig:
@@ -144,12 +173,13 @@ class ConradEngine:
                     category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
                     threshold=types.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
                 ),
-            ]
+            ],
         )
 
     def _init_chat(self, effective_model: Optional[str] = None):
         config = self._build_chat_config()
-        target_model = effective_model or self.model_name
+        target_model = effective_model or self._get_runtime_model(self.model_name)
+        self._active_runtime_model = target_model
         self.chat = self.client.chats.create(model=target_model, config=config)
 
     def send_message(self, prompt: str) -> str:
@@ -158,16 +188,25 @@ class ConradEngine:
             return get_missing_key_message()
 
         try:
+            response = None
+            last_err = None
             try:
                 response = self.chat.send_message(prompt)
             except Exception as err:
-                if "404" in str(err) or "NOT_FOUND" in str(err):
-                    self._init_chat(effective_model="gemini-2.5-flash")
-                    response = self.chat.send_message(prompt)
-                else:
-                    raise
+                last_err = err
+                for fb_model in FALLBACK_MODELS:
+                    try:
+                        self._init_chat(effective_model=fb_model)
+                        response = self.chat.send_message(prompt)
+                        last_err = None
+                        break
+                    except Exception as inner_err:
+                        last_err = inner_err
 
-            if response.text:
+            if last_err is not None and response is None:
+                raise last_err
+
+            if response and response.text:
                 return response.text
 
             # Tratamento de bloqueio por filtros de segurança
@@ -197,61 +236,78 @@ class ConradEngine:
         contents.append(prompt or "Por favor, analise este material e me guie no entendimento do exercício.")
 
         try:
+            response = None
+            last_err = None
             try:
                 response = self.chat.send_message(contents)
             except Exception as err:
-                if "404" in str(err) or "NOT_FOUND" in str(err):
-                    self._init_chat(effective_model="gemini-2.5-flash")
-                    response = self.chat.send_message(contents)
-                else:
-                    raise
-            return response.text if response.text else "(Sem resposta textual da API)"
+                last_err = err
+                for fb_model in FALLBACK_MODELS:
+                    try:
+                        self._init_chat(effective_model=fb_model)
+                        response = self.chat.send_message(contents)
+                        last_err = None
+                        break
+                    except Exception as inner_err:
+                        last_err = inner_err
+
+            if last_err is not None and response is None:
+                raise last_err
+
+            return response.text if (response and response.text) else "(Sem resposta textual da API)"
         except Exception as e:
             raise RuntimeError(f"Erro ao processar conteúdo multimodal: {str(e)}")
 
     def send_message_stream(self, prompt: str):
-        """Envia mensagem e gera chunks de texto em streaming (tempo real)."""
+        """Envia mensagem e gera chunks de texto em streaming (tempo real) com fallback automático."""
         if not self.api_key or not self.chat:
             yield get_missing_key_message()
             return
 
         try:
+            yielded_any = False
             try:
                 response_stream = self.chat.send_message_stream(prompt)
                 for chunk in response_stream:
                     if chunk.text:
+                        yielded_any = True
                         yield chunk.text
-            except Exception as err:
-                if "404" in str(err) or "NOT_FOUND" in str(err):
-                    self._init_chat(effective_model="gemini-2.5-flash")
-                    response_stream = self.chat.send_message_stream(prompt)
-                    for chunk in response_stream:
-                        if chunk.text:
-                            yield chunk.text
-                else:
-                    raise
+                if yielded_any:
+                    return
+            except Exception as first_err:
+                last_err = first_err
+                for fb_model in FALLBACK_MODELS:
+                    try:
+                        self._init_chat(effective_model=fb_model)
+                        response_stream = self.chat.send_message_stream(prompt)
+                        for chunk in response_stream:
+                            if chunk.text:
+                                yielded_any = True
+                                yield chunk.text
+                        if yielded_any:
+                            return
+                    except Exception as inner_err:
+                        last_err = inner_err
+                raise last_err
         except Exception as e:
             yield f"(Erro no streaming: {str(e)})"
 
     def count_tokens(self, contents=None) -> int:
-        """Calcula o consumo de tokens atual via client.models.count_tokens."""
+        """Calcula o consumo de tokens atual de forma resiliente e rápida."""
         if not self.api_key or not self.client:
             return 0
         try:
+            target_model = self._active_runtime_model or "gemini-2.5-flash"
             if contents is None and self.chat:
                 history = self.chat.get_history()
                 if not history:
                     return 0
-                try:
-                    res = self.client.models.count_tokens(model=self.model_name, contents=history)
-                except Exception:
-                    res = self.client.models.count_tokens(model="gemini-2.5-flash", contents=history)
+                res = self.client.models.count_tokens(model=target_model, contents=history)
                 return getattr(res, "total_tokens", 0)
 
-            try:
-                res = self.client.models.count_tokens(model=self.model_name, contents=contents)
-            except Exception:
-                res = self.client.models.count_tokens(model="gemini-2.5-flash", contents=contents)
-            return getattr(res, "total_tokens", 0)
+            if contents is not None:
+                res = self.client.models.count_tokens(model=target_model, contents=contents)
+                return getattr(res, "total_tokens", 0)
+            return 0
         except Exception:
             return 0
