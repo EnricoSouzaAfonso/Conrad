@@ -1,9 +1,11 @@
 import os
+import time
 import unittest
 from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 
 from src.api import app, active_engines
+from src.conrad_core import ConradEngine
 from src.database import init_db, SessionLocal, ChatSessionDB, ChatMessageDB, StudentUser
 
 
@@ -65,6 +67,57 @@ class TestApiAndDatabase(unittest.TestCase):
             self.assertEqual(msgs[1].content, "Olá! Como posso ajudar? 🎩")
         finally:
             db.close()
+
+    @patch("src.conrad_core.genai.Client")
+    def test_validacao_chave_canonica_models_list_valida(self, mock_client_cls):
+        """Garante que validate_api_key() usa client.models.list() sem gastar tokens e aprova chaves válidas."""
+        mock_client = mock_client_cls.return_value
+        mock_model = MagicMock()
+        mock_model.name = "models/gemini-2.5-flash"
+        mock_client.models.list.return_value = iter([mock_model])
+
+        engine = ConradEngine(api_key="AIzaSyValidKeyExample123456")
+        t0 = time.perf_counter()
+        is_valid = engine.validate_api_key()
+        elapsed = time.perf_counter() - t0
+
+        self.assertTrue(is_valid)
+        self.assertLess(elapsed, 0.5)
+        mock_client.models.list.assert_called()
+        mock_client.models.generate_content.assert_not_called()
+
+    @patch("src.conrad_core.genai.Client")
+    def test_rejeicao_chave_corrompida_api_key_invalid(self, mock_client_cls):
+        """Garante que chaves falsas/corrompidas (API_KEY_INVALID) ou vazias são rejeitadas."""
+        mock_client = mock_client_cls.return_value
+        mock_client.models.list.side_effect = Exception(
+            "400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'API key not valid.', 'reason': 'API_KEY_INVALID'}}"
+        )
+
+        engine = ConradEngine(api_key="AIzaSyFakeKey123456789")
+        self.assertFalse(engine.validate_api_key())
+
+        with patch.object(ConradEngine, "_resolve_api_key", return_value=None):
+            empty_engine = ConradEngine(api_key="   ")
+            self.assertFalse(empty_engine.validate_api_key())
+
+    @patch("src.conrad_core.genai.Client")
+    def test_streaming_baixa_latencia_ttft(self, mock_client_cls):
+        """Verifica que send_message_stream entrega os chunks diretamente com baixa latência."""
+        mock_client = mock_client_cls.return_value
+        mock_chat = MagicMock()
+        chunk1 = MagicMock(text="Vamos ")
+        chunk2 = MagicMock(text="pensar juntos! 🎩")
+        mock_chat.send_message_stream.return_value = iter([chunk1, chunk2])
+        mock_client.chats.create.return_value = mock_chat
+
+        engine = ConradEngine(api_key="AIzaSyValidKeyExample123456")
+        t0 = time.perf_counter()
+        chunks = list(engine.send_message_stream("Explique o Teorema de Pitágoras"))
+        elapsed = time.perf_counter() - t0
+
+        self.assertEqual("".join(chunks), "Vamos pensar juntos! 🎩")
+        self.assertLess(elapsed, 0.5)
 
 
 if __name__ == "__main__":

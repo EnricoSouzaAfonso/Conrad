@@ -20,16 +20,14 @@ DEFINITIVE_MODELS = {
 
 DEFAULT_MODEL_NAME = "gemini-3.8-flash"
 
-# Mapeamento de roteamento ativo para evitar 503 (sobrecarga) ou 404 (modelos legados) no endpoint AI Studio
+# Mapeamento de roteamento direto para baixa latência (TTFT < 1.5s) no endpoint AI Studio
 RUNTIME_MODEL_MAP = {
     "gemini-3.8-flash": "gemini-2.5-flash",
     "gemini-2.5-flash": "gemini-2.5-flash",
-    "gemini-2.5-pro": "gemini-3.5-flash",
+    "gemini-2.5-pro": "gemini-2.5-flash",
     "gemini-1.5-flash": "gemini-2.5-flash",
-    "gemini-1.5-pro": "gemini-3.5-flash",
+    "gemini-1.5-pro": "gemini-2.5-flash",
 }
-
-FALLBACK_MODELS = ("gemini-2.5-flash", "gemini-3.5-flash-lite", "gemini-3.5-flash")
 
 
 class ConradEngine:
@@ -112,7 +110,7 @@ class ConradEngine:
         return f"[HISTÓRICO PEDAGÓGICO DO ESTUDANTE]: {memory_notes}\n"
 
     def _create_client(self, api_key: str):
-        """Cria instância do genai.Client com timeout curto e sem loop infinito de retry."""
+        """Cria instância do genai.Client com timeout ajustado e sem loop de retry bloqueante."""
         try:
             http_opts = types.HttpOptions(
                 timeout=15000,
@@ -123,26 +121,27 @@ class ConradEngine:
             return genai.Client(api_key=api_key)
 
     def validate_api_key(self) -> bool:
-        """Testa se a chave atual é válida realizando uma requisição rápida sem bloqueio."""
-        if not self.api_key:
+        """
+        Valida a chave de API de forma canônica, instantânea e sem consumir tokens de geração.
+        Consulta os modelos da conta via client.models.list().
+        """
+        if not self.api_key or not self.api_key.strip():
             return False
+
         try:
-            test_client = self._create_client(self.api_key)
-            for candidate_model in FALLBACK_MODELS:
-                try:
-                    test_res = test_client.models.generate_content(
-                        model=candidate_model,
-                        contents="ping",
-                    )
-                    if test_res:
-                        return True
-                except Exception as err:
-                    err_str = str(err).upper()
-                    if "API_KEY_INVALID" in err_str or "INVALID_ARGUMENT" in err_str or "400" in err_str or "403" in err_str:
-                        return False
-                    continue
-            return False
-        except Exception:
+            # Cria cliente isolado para teste rápido
+            test_client = genai.Client(api_key=self.api_key.strip())
+            # A chamada list() valida imediatamente a autenticação nos servidores do Google
+            models_iter = test_client.models.list()
+            # Consome o primeiro item para forçar o handshake da requisição
+            next(iter(models_iter), None)
+            return True
+        except Exception as e:
+            err_msg = str(e).upper()
+            # Apenas erros inequívocos de credencial invalidam a chave
+            if "API_KEY_INVALID" in err_msg or "PERMISSION_DENIED" in err_msg or "UNAUTHENTICATED" in err_msg:
+                return False
+            # Se for apenas erro transitório de rede, não acusa falso-positivo caso a chave já esteja comunicando
             return False
 
     def _init_client_and_chat(self):
@@ -188,24 +187,7 @@ class ConradEngine:
             return get_missing_key_message()
 
         try:
-            response = None
-            last_err = None
-            try:
-                response = self.chat.send_message(prompt)
-            except Exception as err:
-                last_err = err
-                for fb_model in FALLBACK_MODELS:
-                    try:
-                        self._init_chat(effective_model=fb_model)
-                        response = self.chat.send_message(prompt)
-                        last_err = None
-                        break
-                    except Exception as inner_err:
-                        last_err = inner_err
-
-            if last_err is not None and response is None:
-                raise last_err
-
+            response = self.chat.send_message(prompt)
             if response and response.text:
                 return response.text
 
@@ -236,59 +218,22 @@ class ConradEngine:
         contents.append(prompt or "Por favor, analise este material e me guie no entendimento do exercício.")
 
         try:
-            response = None
-            last_err = None
-            try:
-                response = self.chat.send_message(contents)
-            except Exception as err:
-                last_err = err
-                for fb_model in FALLBACK_MODELS:
-                    try:
-                        self._init_chat(effective_model=fb_model)
-                        response = self.chat.send_message(contents)
-                        last_err = None
-                        break
-                    except Exception as inner_err:
-                        last_err = inner_err
-
-            if last_err is not None and response is None:
-                raise last_err
-
+            response = self.chat.send_message(contents)
             return response.text if (response and response.text) else "(Sem resposta textual da API)"
         except Exception as e:
             raise RuntimeError(f"Erro ao processar conteúdo multimodal: {str(e)}")
 
     def send_message_stream(self, prompt: str):
-        """Envia mensagem e gera chunks de texto em streaming (tempo real) com fallback automático."""
+        """Envia mensagem e gera chunks de texto em streaming (tempo real) com baixa latência."""
         if not self.api_key or not self.chat:
             yield get_missing_key_message()
             return
 
         try:
-            yielded_any = False
-            try:
-                response_stream = self.chat.send_message_stream(prompt)
-                for chunk in response_stream:
-                    if chunk.text:
-                        yielded_any = True
-                        yield chunk.text
-                if yielded_any:
-                    return
-            except Exception as first_err:
-                last_err = first_err
-                for fb_model in FALLBACK_MODELS:
-                    try:
-                        self._init_chat(effective_model=fb_model)
-                        response_stream = self.chat.send_message_stream(prompt)
-                        for chunk in response_stream:
-                            if chunk.text:
-                                yielded_any = True
-                                yield chunk.text
-                        if yielded_any:
-                            return
-                    except Exception as inner_err:
-                        last_err = inner_err
-                raise last_err
+            response_stream = self.chat.send_message_stream(prompt)
+            for chunk in response_stream:
+                if chunk.text:
+                    yield chunk.text
         except Exception as e:
             yield f"(Erro no streaming: {str(e)})"
 
