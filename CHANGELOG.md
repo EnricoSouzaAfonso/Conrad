@@ -5,6 +5,14 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [2.2.0] - 23/10/2026
+
+### Adicionado
+- **Lançamento do Conrad Canvas e Interface Split-View (`app.py`, `src/conrad_canvas.py`):** Divisão da interface principal em duas colunas dinâmicas (`col_chat` à esquerda para o diálogo socrático limpo e `col_canvas` à direita para o "📐 Quadro Negro do Conrad").
+- **Protocolo de Artifacts (`src/conrad_persona.py`, `src/conrad_canvas.py`):** Diretriz de sistema e parser (`CanvasParser` e `ConradArtifact`) para interceptar e projetar tags `<conrad_artifact type="math|code|mermaid|summary" title="...">` diretamente no Quadro Negro com suporte a MathJax, Syntax Highlighting e diagramas Mermaid nativos.
+- **Pensamento Pedagógico Visível / CoT (`app.py`, `src/conrad_canvas.py`):** Componente expansível discreto (`🧠 Raciocínio Pedagógico do Conrad (Estratégia Socrática)`) no topo das respostas do assistente para dar transparência à mediação socrática.
+- **Suíte de Testes do Canvas (`tests/test_canvas_artifacts.py`):** Validação automatizada da extração de artifacts matemáticos (Equação de Bernoulli), diagramas Mermaid, blocos de código, resumos e resiliência em mensagens puramente conversacionais.
+
 ## [2.1.0] - 23/10/2026
 
 ### Adicionado

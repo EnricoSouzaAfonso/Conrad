@@ -18,7 +18,7 @@ class TestConradPersona(unittest.TestCase):
 
     def test_metadados_persona(self):
         self.assertEqual(CONRAD_NAME, "Conrad")
-        self.assertEqual(CONRAD_VERSION, "2.1.0")
+        self.assertEqual(CONRAD_VERSION, "2.2.0")
         self.assertIn("Tutor Socrático", CONRAD_ARCHETYPE)
         self.assertEqual(self.instruction, SYSTEM_INSTRUCTION_CONRAD.strip())
 

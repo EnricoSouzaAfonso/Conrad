@@ -1,26 +1,42 @@
 """
-Interface Web Autônoma do Conrad — Versão 2.1.0
-Upgrade Gemini 3.8 Flash, Seletor de Modelos Definitivos, Onboarding BYOK e Recursos Pedagógicos.
+Interface Web Autônoma do Conrad — Versão 2.2.0
+Split-View com Quadro Negro Interativo (Conrad Canvas / Artifacts),
+Pensamento Pedagógico Visível (CoT), Mermaid Nativo, Gemini 3.8 Flash e Onboarding BYOK.
 """
+import re
 import streamlit as st
 from src.conrad_core import ConradEngine, DEFINITIVE_MODELS, DEFAULT_MODEL_NAME
 from src.conrad_persona import get_missing_key_message
+from src.conrad_canvas import CanvasParser
 from src.assets.conrad_avatar import CONRAD_AVATAR_SVG
 
 st.set_page_config(
-    page_title="Conrad — Assistente Cognitivo & Pedagógico",
+    page_title="Conrad — Tutor Socrático",
     page_icon="🎩",
-    layout="centered",
+    layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# CSS e Identidade Visual Dark Elegante
+# CSS para Dark Mode e Estilização do Quadro Negro (Split-View)
 st.markdown(
     """
 <style>
-  .stApp { background-color: #1e1e1e; color: #f0f0f0; }
-  .chat-header { text-align: center; margin-bottom: 20px; }
+  .stApp { background-color: #121212; color: #e0e0e0; }
   .stChatMessage { border-radius: 8px; margin-bottom: 10px; }
+  .canvas-container {
+      background-color: #1a1a1a;
+      border: 1px solid #333333;
+      border-radius: 12px;
+      padding: 18px;
+      min-height: 520px;
+  }
+  .canvas-header {
+      border-bottom: 2px solid #C59B27;
+      padding-bottom: 8px;
+      margin-bottom: 14px;
+      font-weight: 600;
+      color: #f5f5f5;
+  }
   .token-badge {
       background-color: #2b2b2b;
       border: 1px solid #444;
@@ -48,13 +64,25 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Inicialização de Estado (Lazy — Zero Crash sem API Key)
+# Inicialização de Estados (Lazy — Zero Crash sem API Key)
 if "engine" not in st.session_state:
     st.session_state.engine = ConradEngine()
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "selected_model_label" not in st.session_state:
     st.session_state.selected_model_label = list(DEFINITIVE_MODELS.keys())[0]
+if "active_artifact" not in st.session_state:
+    st.session_state.active_artifact = None
+
+
+def _clean_code_or_mermaid_fence(content: str, expected_lang: str = "") -> str:
+    """Remove cercas markdown redundantes caso o modelo as inclua dentro do artifact."""
+    stripped = content.strip()
+    pattern = rf"^```(?:{expected_lang}|\w+)?\s*\n(.*?)\n```$"
+    match = re.match(pattern, stripped, flags=re.DOTALL | re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+    return stripped
 
 
 def _format_study_summary_markdown(messages) -> str:
@@ -71,7 +99,11 @@ def _format_study_summary_markdown(messages) -> str:
     else:
         for msg in messages:
             author = "🧑 Você" if msg["role"] == "user" else "🎩 Conrad"
-            lines.append(f"### {author}\n\n{msg['content']}\n\n---\n")
+            lines.append(f"### {author}\n\n{msg['content']}\n")
+            art = msg.get("artifact")
+            if art:
+                lines.append(f"\n#### 📐 Quadro Negro: {art.title} ({art.type.upper()})\n\n{art.content}\n")
+            lines.append("\n---\n")
     return "\n".join(lines)
 
 
@@ -79,7 +111,10 @@ def _format_study_summary_markdown(messages) -> str:
 # --- SIDEBAR: SELETOR DE MODELOS, ONBOARDING BYOK & UTILITÁRIOS ---
 # ==============================================================================
 with st.sidebar:
-    st.markdown(f"<div style='display:flex;align-items:center;gap:8px;'>{CONRAD_AVATAR_SVG} <h3 style='margin:0;'>Configurações</h3></div>", unsafe_allow_html=True)
+    st.markdown(
+        f"<div style='display:flex;align-items:center;gap:8px;'>{CONRAD_AVATAR_SVG} <h3 style='margin:0;'>Configurações</h3></div>",
+        unsafe_allow_html=True,
+    )
     st.caption("Personalize o motor cognitivo e sua chave de acesso.")
 
     # 1. Seletor de Modelos Definitivos
@@ -142,6 +177,7 @@ with st.sidebar:
 
     if st.button("🔄 Nova Conversa", use_container_width=True):
         st.session_state.messages = []
+        st.session_state.active_artifact = None
         if st.session_state.engine.api_key:
             st.session_state.engine._init_chat()
         st.rerun()
@@ -156,39 +192,107 @@ with st.sidebar:
 
 
 # ==============================================================================
-# --- ÁREA PRINCIPAL DO CHAT ---
+# --- ÁREA PRINCIPAL: LAYOUT SPLIT-VIEW (CHAT À ESQUERDA | CANVAS À DIREITA) ---
 # ==============================================================================
-st.title("🎩 Conrad — Assistente Pedagógico")
-st.caption(f"Tutor Socrático & Construtivista | Modelo ativo: `{st.session_state.engine.model_name}`")
+col_chat, col_canvas = st.columns([1.1, 0.9], gap="medium")
 
-# Exibição do histórico de mensagens
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"], avatar="🎩" if msg["role"] == "assistant" else None):
-        st.markdown(msg["content"])
+with col_chat:
+    st.subheader("🎩 Diálogo com Conrad")
+    st.caption(f"Tutor Socrático & Construtivista | Modelo ativo: `{st.session_state.engine.model_name}`")
 
-# Input do usuário
-if prompt := st.chat_input("Como posso ajudar seus estudos hoje? (digite 'fim' para encerrar)"):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
+    # Renderização das mensagens de chat (apenas diálogo limpo + CoT expansível)
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"], avatar="🎩" if msg["role"] == "assistant" else None):
+            if msg["role"] == "assistant" and msg.get("show_cot", False):
+                with st.expander("🧠 Raciocínio Pedagógico do Conrad (Estratégia Socrática)", expanded=False):
+                    st.caption(
+                        msg.get("thought")
+                        or "O Conrad avaliou o nível conceitual da sua dúvida e selecionou pistas indutivas em vez de respostas prontas."
+                    )
+            st.markdown(msg["content"])
 
-    with st.chat_message("assistant", avatar="🎩"):
-        # Caso 1: Ausência de API Key — Resposta pré-programada graciosa (Zero Crash)
-        if not st.session_state.engine.api_key:
-            missing_msg = get_missing_key_message()
-            st.markdown(missing_msg)
-            st.session_state.messages.append({"role": "assistant", "content": missing_msg})
-        # Caso 2: Comando estrito de encerramento
-        elif prompt.strip() == "fim":
-            farewell_msg = "Foi um prazer enorme explorar o conhecimento com você! Lembre-se de revisar os conceitos que discutimos hoje para consolidar seu aprendizado. Até a próxima! 🎩"
-            st.markdown(farewell_msg)
-            st.session_state.messages.append({"role": "assistant", "content": farewell_msg})
-        # Caso 3: Streaming em tempo real via ConradEngine
+    # Input do aluno
+    if prompt := st.chat_input("Como posso ajudar seus estudos hoje? (digite 'fim' para encerrar)"):
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        with st.chat_message("assistant", avatar="🎩"):
+            # Caso 1: Ausência de API Key — Resposta pré-programada graciosa (Zero Crash)
+            if not st.session_state.engine.api_key:
+                missing_msg = get_missing_key_message()
+                st.markdown(missing_msg)
+                st.session_state.messages.append(
+                    {"role": "assistant", "content": missing_msg, "show_cot": False}
+                )
+            # Caso 2: Comando estrito de encerramento
+            elif prompt.strip() == "fim":
+                farewell_msg = (
+                    "Foi um prazer enorme explorar o conhecimento com você! "
+                    "Lembre-se de revisar os conceitos que discutimos hoje para consolidar seu aprendizado. Até a próxima! 🎩"
+                )
+                st.markdown(farewell_msg)
+                st.session_state.messages.append(
+                    {"role": "assistant", "content": farewell_msg, "show_cot": False}
+                )
+            # Caso 3: Streaming em tempo real + Extração de Artifacts para o Quadro Negro
+            else:
+                with st.expander("🧠 Raciocínio Pedagógico do Conrad (Estratégia Socrática)", expanded=False):
+                    cot_placeholder = st.empty()
+                    cot_placeholder.caption(
+                        "O Conrad avaliou o nível conceitual da sua dúvida e selecionou pistas indutivas em vez de respostas prontas."
+                    )
+
+                response_placeholder = st.empty()
+                full_text = ""
+                for chunk in st.session_state.engine.send_message_stream(prompt):
+                    full_text += chunk
+                    preview_text, _ = CanvasParser.parse_message(full_text)
+                    response_placeholder.markdown(preview_text + "▌")
+
+                text_without_thought, extracted_thought = CanvasParser.parse_thought(full_text)
+                if extracted_thought:
+                    cot_placeholder.caption(extracted_thought)
+
+                clean_chat_text, artifact = CanvasParser.parse_message(text_without_thought)
+                response_placeholder.markdown(clean_chat_text)
+
+                if artifact:
+                    st.session_state.active_artifact = artifact
+
+                st.session_state.messages.append(
+                    {
+                        "role": "assistant",
+                        "content": clean_chat_text,
+                        "show_cot": True,
+                        "thought": extracted_thought,
+                        "artifact": artifact,
+                    }
+                )
+
+with col_canvas:
+    st.subheader("📐 Quadro Negro do Conrad")
+    with st.container():
+        st.markdown('<div class="canvas-container">', unsafe_allow_html=True)
+        if st.session_state.active_artifact:
+            art = st.session_state.active_artifact
+            st.markdown(
+                f'<div class="canvas-header">📌 {art.title} ({art.type.upper()})</div>',
+                unsafe_allow_html=True,
+            )
+
+            if art.type == "math":
+                st.markdown(art.content)
+            elif art.type == "code":
+                st.code(_clean_code_or_mermaid_fence(art.content))
+            elif art.type == "mermaid":
+                # Renderiza diagrama Mermaid nativo
+                clean_mermaid = _clean_code_or_mermaid_fence(art.content, "mermaid")
+                st.markdown(f"```mermaid\n{clean_mermaid}\n```")
+            else:
+                st.markdown(art.content)
         else:
-            response_placeholder = st.empty()
-            full_text = ""
-            for chunk in st.session_state.engine.send_message_stream(prompt):
-                full_text += chunk
-                response_placeholder.markdown(full_text + "▌")
-            response_placeholder.markdown(full_text)
-            st.session_state.messages.append({"role": "assistant", "content": full_text})
+            st.info(
+                "O Quadro Negro está limpo. Conforme o Conrad apresentar fórmulas, diagramas ou códigos, eles aparecerão aqui automaticamente!"
+            )
+        st.markdown("</div>", unsafe_allow_html=True)
