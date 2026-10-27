@@ -5,6 +5,11 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [3.3.1] - 27/10/2026
+
+### Adicionado
+- **Protocolo Permanente de Governança Documental (`tests/qa_visual_inspection.py`, `src/conrad_persona.py`):** Implementação da função automatizada `check_documentation_sync()` integrada ao fluxo obrigatório de QA para validar a sincronia entre `CONRAD_VERSION` (`src/conrad_persona.py`), o registro em `CHANGELOG.md` e a integridade bilíngue de `README(PT-BR).md` e `README(ENG).md`.
+
 ## [3.3.0] - 27/10/2026
 
 ### Documentação

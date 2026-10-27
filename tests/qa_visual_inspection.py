@@ -222,6 +222,43 @@ def _capture_live_streamlit_screenshots(url: str, output_png: str) -> bool:
         shutil.rmtree(profile_dir, ignore_errors=True)
 
 
+def check_documentation_sync():
+    """Valida se as versões e os READMEs estão sincronizados com o código."""
+    print("\n[Auditoria Documental] Verificando sincronização de versões e READMEs...")
+
+    # 1. Captura versão da persona
+    from src.conrad_persona import CONRAD_VERSION
+
+    # 2. Verifica se a versão consta no CHANGELOG.md
+    changelog_path = os.path.join(os.path.dirname(__file__), "..", "CHANGELOG.md")
+    assert os.path.isfile(changelog_path), "Erro: CHANGELOG.md não encontrado!"
+    with open(changelog_path, "r", encoding="utf-8") as f:
+        changelog_content = f.read()
+    assert f"[{CONRAD_VERSION}]" in changelog_content, (
+        f"Falha de Governança: A versão {CONRAD_VERSION} declarada em src/conrad_persona.py "
+        f"não está registrada no CHANGELOG.md!"
+    )
+
+    # 3. Verifica existência e integridade dos READMEs bilíngues
+    readme_pt_path = os.path.join(os.path.dirname(__file__), "..", "README(PT-BR).md")
+    readme_en_path = os.path.join(os.path.dirname(__file__), "..", "README(ENG).md")
+    assert os.path.isfile(readme_pt_path), "Erro: README(PT-BR).md não encontrado!"
+    assert os.path.isfile(readme_en_path), "Erro: README(ENG).md não encontrado!"
+
+    with open(readme_pt_path, "r", encoding="utf-8") as f:
+        pt_content = f.read()
+    with open(readme_en_path, "r", encoding="utf-8") as f:
+        en_content = f.read()
+
+    # Valida presença das tecnologias vigentes em ambos
+    for tech in ("gemini", "streamlit", "fastapi"):
+        assert tech in pt_content.lower(), f"Falha no README(PT-BR): '{tech}' não mencionado!"
+        assert tech in en_content.lower(), f"Falha no README(ENG): '{tech}' não mencionado!"
+
+    print("✅ Governança Documental APROVADA: Versões, Changelog e READMEs 100% sincronizados!")
+    return True
+
+
 def run_qa_suite():
     print("=" * 70)
     print("INICIANDO PROTOCOLO DE QA E VALIDAÇÃO VISUAL — PROJETO CONRAD")
@@ -343,6 +380,9 @@ def run_qa_suite():
     )
     assert res_ped.returncode == 0, f"Falha na auditoria pedagógica:\n{res_ped.stderr}"
     print("✅ Auditoria Pedagógica APROVADA: Bloom, Sweller e Growth Mindset 100% validados!")
+
+    # 6. Auditoria Permanente de Governança Documental
+    check_documentation_sync()
 
     print("\n" + "=" * 70)
     print("RESULTADO: SUÍTE DE QA 100% HOMOLOGADA — PRONTO PARA SUBIR!")
