@@ -87,21 +87,56 @@ st.markdown(
       padding-bottom: 140px !important; /* Espaço reservado para o Floating Dock */
   }
 
-  /* 4. Coluna do Quadro Negro: Altura proporcional e scroll independente */
+  /* ==============================================================================
+     REMOÇÃO DA SCROLLBAR DUPLA NA COLUNA DO QUADRO NEGRO
+     ============================================================================== */
+
+  /* 1. Coluna direita não força scrollbar permanente */
   div[data-testid="stColumn"]:last-child {
-      --scrollbar-thumb: #333333;
-      --scrollbar-track: transparent;
-      height: calc(100dvh - 90px) !important;
-      overflow-y: auto !important;
-      scrollbar-gutter: stable !important;
-      scrollbar-width: thin;
-      scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
-      overscroll-behavior: contain !important;
+      height: auto !important;
+      max-height: calc(100dvh - 90px) !important;
+      overflow: visible !important;
       min-inline-size: 0 !important;
-      padding-right: 8px !important;
+      padding-right: 4px !important;
   }
 
-  /* 5. Customização da Scrollbar (Ultra-fina, elegante e discreta + fallback WebKit) */
+  /* Reset para colunas aninhadas (cabeçalho do chat e botões de download do Canvas) */
+  div[data-testid="stColumn"] div[data-testid="stColumn"],
+  div[data-testid="stColumn"] div[data-testid="stColumn"]:first-child,
+  div[data-testid="stColumn"] div[data-testid="stColumn"]:last-child {
+      height: auto !important;
+      max-height: none !important;
+      overflow: visible !important;
+      padding-bottom: 0 !important;
+      padding-right: 0 !important;
+  }
+
+  /* 2. O Card do Quadro Negro só rola se a dedução for muito longa, com barra discreta */
+  div[data-testid="stColumn"]:last-child div[data-testid="stVerticalBlockBorderWrapper"] {
+      max-height: calc(100dvh - 160px) !important;
+      overflow-y: auto !important;
+      scrollbar-gutter: stable !important;
+      scrollbar-width: thin !important;
+      scrollbar-color: transparent transparent !important; /* Invisível por padrão */
+  }
+
+  /* 3. A barra da lousa só ganha cor sutil quando o usuário passar o mouse por cima dela */
+  div[data-testid="stColumn"]:last-child div[data-testid="stVerticalBlockBorderWrapper"]:hover {
+      scrollbar-color: #444444 transparent !important;
+  }
+
+  /* 4. Adaptação de alto contraste para acessibilidade */
+  @media (prefers-contrast: more) {
+      div[data-testid="stColumn"]:first-child {
+          --scrollbar-thumb: #ffffff;
+          --scrollbar-track: #000000;
+      }
+      div[data-testid="stColumn"]:last-child div[data-testid="stVerticalBlockBorderWrapper"]:hover {
+          scrollbar-color: #ffffff #000000 !important;
+      }
+  }
+
+  /* 5. Customização da Scrollbar (Fallback WebKit legado isolado por @supports) */
   @supports not (scrollbar-color: auto) {
       ::-webkit-scrollbar {
           width: 6px !important;
@@ -117,20 +152,6 @@ st.markdown(
       ::-webkit-scrollbar-thumb:hover {
           background: #555555 !important;
       }
-  }
-  ::-webkit-scrollbar {
-      width: 6px !important;
-      height: 6px !important;
-  }
-  ::-webkit-scrollbar-track {
-      background: transparent !important;
-  }
-  ::-webkit-scrollbar-thumb {
-      background: #333333 !important;
-      border-radius: 4px !important;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-      background: #555555 !important;
   }
 
   /* ==============================================================================
@@ -495,7 +516,7 @@ else:
 
 with col_chat:
     # Cabeçalho do Chat com botão de alternância do Quadro Negro
-    col_title, col_toggle = st.columns([0.75, 0.25])
+    col_title, col_toggle = st.columns([0.68, 0.32])
     with col_title:
         st.subheader("🎩 Diálogo com Conrad")
     with col_toggle:

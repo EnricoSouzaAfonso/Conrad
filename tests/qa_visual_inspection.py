@@ -124,7 +124,7 @@ def _capture_live_streamlit_screenshots(url: str, output_png: str) -> bool:
             })
             time.sleep(2.5)
 
-            # Captura o screenshot 1: API Key validada (banner verde) + Lousa inicial encapsulada
+            # Captura o screenshot 1: API Key validada (banner verde) + Lousa inicial encapsulada sem scrollbar dupla
             msg_id += 1
             shot = _cdp_call(ws, msg_id, "Page.captureScreenshot", {"format": "png"})
             b64_data = shot.get("data")
@@ -132,7 +132,28 @@ def _capture_live_streamlit_screenshots(url: str, output_png: str) -> bool:
                 with open(output_png, "wb") as f:
                     f.write(base64.b64decode(b64_data))
 
-            # Envia uma pergunta matemática no chat_input para comprovar fórmula DENTRO do Quadro Negro
+            # Clica em "✖ Ocultar Lousa" para comprovar a retração da lousa e expansão centralizada do chat
+            expanded_png = os.path.join(SCREENSHOT_DIR, "conrad_canvas_retratil_expandido.png")
+            msg_id += 1
+            _cdp_call(ws, msg_id, "Runtime.evaluate", {
+                "expression": """
+                (() => {
+                    const buttons = Array.from(document.querySelectorAll('button'));
+                    const btn = buttons.find(b => b.innerText.includes('Ocultar Lousa'));
+                    if (btn) btn.click();
+                })()
+                """,
+            })
+            time.sleep(1.8)
+
+            msg_id += 1
+            shot_expanded = _cdp_call(ws, msg_id, "Page.captureScreenshot", {"format": "png"})
+            b64_expanded = shot_expanded.get("data")
+            if b64_expanded:
+                with open(expanded_png, "wb") as f:
+                    f.write(base64.b64decode(b64_expanded))
+
+            # Com a lousa oculta, envia pergunta matemática para comprovar Auto-Reveal + fórmula DENTRO do Quadro Negro
             formula_png = os.path.join(SCREENSHOT_DIR, "conrad_canvas_formula_homologado.png")
             msg_id += 1
             _cdp_call(ws, msg_id, "Runtime.evaluate", {
@@ -260,7 +281,10 @@ def run_qa_suite():
     assert "border-radius: 28px !important;" in app_src, "Falha: Estilo do Floating Input Dock ausente!"
     assert 'id="jump-to-bottom-btn"' in app_src, "Falha: Botão scroll-to-bottom ausente!"
     assert 'class="chat-bottom-spacer"' in app_src, "Falha: Espaçador .chat-bottom-spacer ausente!"
-    print("✅ Parser do Canvas, Viewport 100dvh Unificado e Floating Input Dock: 100% íntegros!")
+    assert "canvas_collapsed" in app_src, "Falha: Estado retrátil canvas_collapsed ausente!"
+    assert "✖ Ocultar Lousa" in app_src and "📐 Abrir Lousa" in app_src, "Falha: Botão de alternância da lousa ausente!"
+    assert "scrollbar-color: transparent transparent !important;" in app_src, "Falha: Extinção da scrollbar rígida da lousa ausente!"
+    print("✅ Parser do Canvas, Quadro Negro Retrátil, Viewport 100dvh e Floating Input Dock: 100% íntegros!")
 
     # 4. Relatório e Registro de Screenshots
     print("\n[Passo 4/4] Gerando evidências de teste em tests/screenshots/...")

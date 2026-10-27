@@ -5,6 +5,11 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [3.2.1] - 27/10/2026
+
+### Corrigido
+- **Extinção da Scrollbar Rígida na Coluna do Quadro Negro (`app.py`):** Substituição do `overflow-y: auto` permanente na coluna direita (`div[data-testid="stColumn"]:last-child`) por `height: auto !important; overflow: visible !important;`, delegando a rolagem exclusivamente ao card interno (`div[data-testid="stVerticalBlockBorderWrapper"]`) com `max-height: calc(100dvh - 160px)` e barra invisível por padrão (`scrollbar-color: transparent transparent`), revelada sutilmente apenas em `:hover` (`#444444 transparent`).
+
 ## [3.2.0] - 27/10/2026
 
 ### Adicionado
