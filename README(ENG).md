@@ -2,21 +2,30 @@
   <img src="Conrad_Logo.jpg" alt="Conrad's Logo" width="700"/>
 </p>
 
-# Conrad - Your Personal AI Learning Assistant
+# Conrad - Personal Socratic AI Learning Assistant
 
-[![Python](https://img.shields.io/badge/Python-3.x-blue.svg)](https://www.python.org/) [![Google Gemini](https://img.shields.io/badge/Google-Gemini%20API-purple.svg)](https://ai.google.dev/) [![Google Colab](https://img.shields.io/badge/Google%20Colab-notebook-orange.svg)](https://colab.research.google.com/)
+[![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
+[![Google Gemini](https://img.shields.io/badge/Gemini-3.8%20Flash%20(1M%20Tokens)-purple.svg)](https://ai.google.dev/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-Web%20App-red.svg)](https://streamlit.io/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-Backend%20API-teal.svg)](https://fastapi.tiangolo.com/)
+[![Docker](https://img.shields.io/badge/Docker-Container-blue.svg)](https://www.docker.com/)
+[![Google Colab](https://img.shields.io/badge/Google%20Colab-notebook-orange.svg)](https://colab.research.google.com/github/EnricoSouzaAfonso/Conrad/blob/main/Conrad.ipynb)
+[![License](https://img.shields.io/badge/License-CC--BY--NC--4.0-lightgrey.svg)](LICENSE)
 
-**Conrad is an intelligent chatbot designed to be a learning companion, leveraging the power of Google's Gemini API to provide clear, engaging, and personalized explanations on a wide range of topics.**
+**Conrad is a high-performance intelligent pedagogical assistant designed to act as an individualized Socratic tutor. Powered by the modern `google-genai` SDK and the Google Gemini model family (with up to a 1,048,576-token context window), Conrad guides students in actively building knowledge through inductive questioning, an interactive blackboard, and evidence-based learning science.**
 
 ---
 
 ## 📋 Table of Contents
-
 - [About the Project](#about-the-project)
 - [Key Features](#key-features)
-- [Getting Started with Conrad](#getting-started-with-conrad)
+- [Software Architecture](#software-architecture)
+- [How to Run Conrad](#how-to-run-conrad)
+  - [Option 1: Local Web Application (Streamlit)](#option-1-local-web-application-streamlit)
+  - [Option 2: Docker Container](#option-2-docker-container)
+  - [Option 3: Google Colab](#option-3-google-colab)
 - [Technologies Used](#technologies-used)
-- [Advanced Customization](#advanced-customization)
+- [Pedagogical Modes](#pedagogical-modes)
 - [Version History](#version-history)
 - [Contributing](#contributing)
 - [Developed by](#developed-by)
@@ -24,117 +33,174 @@
 
 ---
 
-## About the Project
+## 🎩 About the Project
 
-Conrad was born from the idea of making learning more accessible, interactive, and tailored to individual needs. Its mission is not just to provide answers, but to guide users through a process of discovery, using a Socratic and constructivist approach to help build a deep understanding of any subject.
+**Conrad** was created with the mission of transforming generative artificial intelligence into a true cognitive study partner—rather than an answer-giving machine that bypasses critical thinking. Represented by his signature Victorian top hat (🎩), Conrad combines epistemological rigor, empathy, and next-generation UI engineering.
 
-Whether you are a curious student, a professional seeking new knowledge, or someone who simply loves to learn, Conrad is here to help you explore everything from basic everyday concepts to complex theories like the Drake Equation.
-
----
-
-## Key Features
-
-- **Interactive Chat Interface in Colab:** A rich and friendly chat experience created with `ipywidgets`, styled with CSS, and enhanced with JavaScript, all within a notebook.
-- **Socratic Pedagogy:** Conrad strives to ask questions and use analogies to guide reasoning, rather than just providing direct answers.
-- **Dynamic Multilingual Support:** Detects the user's language and adapts its responses to maintain a fluid and natural conversation.
-- **Advanced Code Generation:**
-    - Code blocks with automatic **syntax highlighting** for hundreds of languages.
-    - **Copy** and **Download** buttons for each code snippet.
-    - A visual indicator of the detected programming language.
-- **AI Model Customization:** Includes a utility cell to list available Gemini models and allows for easy replacement of the default model.
-- **Visible Context Management:** A token counter informs the user about the conversation's context window usage, helping to manage longer learning sessions.
-- **Empathetic and Patient Persona:** Designed to recognize user frustration, validate their feelings, and proactively suggest new learning strategies.
+In its **v3.3** architecture, Conrad operates on four scientific pillars of education:
+1. **Revised Bloom's Taxonomy:** Structured progression guiding learners from remembering and understanding up to analyzing, evaluating, and creating.
+2. **Cognitive Load Theory (John Sweller):** Strict enforcement of the *Single-Question Rule* (at most one reflective question per turn) and separation between concise chat dialogue and heavy visual derivations.
+3. **Zone of Proximal Development & Scaffolding (Lev Vygotsky):** Graduated 3-tier scaffolding (Conceptual Hint, Structural Hint, and Partial Analogous Example) with progressive *Fading*.
+4. **Growth Mindset (Carol Dweck):** Process-oriented praise and reframing errors as valuable opportunities for neuroplasticity and deeper mastery.
 
 ---
 
-## Getting Started with Conrad
+## ✨ Key Features
 
-Follow these steps to get your own instance of Conrad running in minutes.
-
-1.  **Get your Google Gemini API Key:**
-    - Go to [Google AI Studio](https://aistudio.google.com/).
-    - Click on "**Get API key**" and create a new key.
-    - **Copy and save this key**, you will need it in step 3.
-
-2.  **Open the Project in Google Colab:**
-    - Click the button below to open the notebook directly in Google Colab.
-      
-      [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/EnricoSouzaAfonso/ImersaoGemini_Alura_Conrad/blob/main/Conrad.ipynb)
-
-3.  **Configure the API Key:**
-    - In the Google Colab notebook you opened, click on the **key icon (Secrets)** in the left sidebar.
-    - Create a new secret named `GOOGLE_API_KEY`.
-    - In the "Value" field, paste the API Key you obtained in step 1.
-    - Make sure the "Notebook access" toggle is enabled for this secret.
-
-4.  **Run the Cells:**
-    - **Cell 1 (`!pip install`):** Run this first to install all the necessary dependencies.
-    - **Cell 2 (Initial Setup):** Run this to import the libraries and configure the API Key.
-    - **Cell 4 (Main Interface):** Run this cell to start Conrad's chat interface.
-    - You can now start chatting with Conrad!
+- **🧠 `google-genai` Cognitive Engine (1M Tokens):** Configured by default with `gemini-3.8-flash` alongside an integrated sidebar selector for stable models (`gemini-2.5-pro`, `gemini-2.5-flash`, and `gemini-2.5-flash-lite`), featuring transparent failover against demand spikes and smooth ~25fps streaming (`40ms` throttle).
+- **📐 Conrad's Blackboard (Collapsible Split-View Canvas):** A retractable side panel (`✖ Ocultar Lousa` / `📐 Abrir Lousa`) inspired by *Claude Artifacts*. Collapses to expand the centered chat and automatically opens (*Auto-Reveal*) whenever Conrad projects algebraic derivations in **LaTeX/MathJax v3**, conceptual diagrams in **Mermaid.js** (with syntax validation and auto-repair), or formatted code blocks.
+- **💬 Floating Input Dock & Unified `100dvh` Viewport:** A pill-shaped floating prompt bar fixed at the bottom of the screen with *glassmorphism* (`backdrop-filter: blur(16px)`), complete elimination of competing dual scrollbars, and a floating *Scroll-to-Bottom* button (`↓`).
+- **🔍 Pedagogical Chain-of-Thought (`<conrad_thought>`):** An expandable accordion (*"🧠 Raciocínio Pedagógico do Conrad"*) that transparently reveals the student's diagnosed Bloom level and the Socratic strategy chosen for each response.
+- **📎 Multimodal Study Vision:** Direct upload of notebook photos, scratchpad sheets, or problem sets in `.png`, `.jpg`, and `.pdf` for automatic problem transcription onto the Blackboard and step-by-step guidance.
+- **🧬 Persistent Cognitive Memory (SQLite):** Continuous tracking of the student's strengths, evolving difficulties, and learning style in a local relational database (`src/database.py`).
+- **📓 Digital Notebook & Retention Thermometer:** Instant compilation of the study session (dialogue + Blackboard artifacts) for download as **Markdown (`.md`)** and **typeset PDF (`.pdf`)**, paired with a real-time Cognitive Retention Thermometer.
+- **🔑 Zero False-Positive BYOK (Bring Your Own Key) System:** Secure Gemini API key input directly in the sidebar, millisecond canonical validation via `client.models.list()`, *Zero Crash* protection when no key is configured, and an integrated step-by-step onboarding guide.
 
 ---
 
-## Technologies Used
+## 🏗️ Software Architecture
 
-- **Backend:** [Python](https.python.org/)
-- **Generative AI:** [Google Gemini API](https://ai.google.dev/) (current default: `gemini-2.5-flash`)
-- **Execution Environment:** [Google Colab](https://colab.research.google.com/)
-- **Interactive Interface:** [IPython Widgets (ipywidgets)](https://ipywidgets.readthedocs.io/en/stable/)
-- **Text Processing:**
-    - [Markdown2](https://github.com/trentm/python-markdown2): To convert Markdown responses into HTML.
-    - [BeautifulSoup4](https://www.crummy.com/software/BeautifulSoup/): To manipulate the HTML and add features to the code blocks.
-    - [Pygments](https://pygments.org/): For code syntax highlighting.
+The project follows a decoupled modular architecture (*Clean Architecture*), allowing the same cognitive core to power the Streamlit Web App, the FastAPI RESTful backend, and the Google Colab notebook:
 
----
-
-## Advanced Customization
-
-Conrad is designed to be flexible.
-
-### Altering the AI Model
-
-If you want to try a different Gemini model (e.g., a Pro model or a newer version), you can use **Cell 3 (List Available Models)**.
-
-1.  Run Cell 3.
-2.  It will list all models available to your API Key, with their technical names and limits.
-3.  Copy the `Technical Name` of the desired model (e.g., `models/gemini-2.5-pro`).
-4.  In **Cell 2**, paste this name into the `model_name_conrad` variable.
-5.  Rerun Cell 2 and Cell 4 to start the chat with the new model.
-
-### Adjusting Conrad's Personality
-
-Conrad's personality, rules, and all teaching strategies are defined in the `system_instruction_conrad` variable at the top of **Cell 4**. You can edit this long text to adjust its behavior, tone, or even add new rules and abilities.
-
----
-
-## Version History
-
-For a detailed breakdown of all changes, new features, and fixes in each version of Conrad, please see the [**CHANGELOG.md**](CHANGELOG.md) file.
+```text
+Conrad/
+├── app.py                        # Main Web Application (Streamlit Split-View + Floating Dock)
+├── Conrad.ipynb                  # Interactive Notebook for cloud execution on Google Colab
+├── Dockerfile                    # Container image for reproducible deployment
+├── docker-compose.yml            # Orchestration for Web (Streamlit) and API (FastAPI) services
+├── requirements.txt              # Pinned dependencies for the v3.x ecosystem
+├── src/
+│   ├── conrad_core.py            # GenAI Engine (google-genai), Streaming, Multimodal & BYOK Validation
+│   ├── conrad_persona.py         # Master Prompt v3.x, Socratic Persona & MathJax Shielding
+│   ├── conrad_pedagogy.py        # Pedagogical Governance (Bloom, Sweller, Vygotsky, Dweck & 4 Modes)
+│   ├── conrad_canvas.py          # Parser for <conrad_artifact>, <conrad_thought> & Mermaid auto-repair
+│   ├── conrad_analytics.py       # Heuristic Cognitive Retention & Active Engagement Thermometer
+│   ├── conrad_report.py          # Digital Notebook Compiler for Markdown (.md) and PDF (fpdf2)
+│   ├── database.py               # SQLAlchemy + SQLite Persistence (Cognitive Profile & Sessions)
+│   ├── api.py                    # FastAPI RESTful Backend (/health, /chat, /sessions)
+│   └── conrad_ui.py              # Interactive ipywidgets interface for Google Colab
+└── tests/
+    ├── qa_visual_inspection.py   # End-to-End QA Suite + Headless Visual Inspection + Doc Governance
+    ├── test_pedagogical_rigor.py # Automated audit for Bloom, Sweller, Dweck & Anti-Sycophancy
+    ├── test_chaos_and_edge_cases.py # Stress Testing Battery, XSS, LaTeX & HTTP Resilience
+    ├── test_canvas_artifacts.py  # Unit tests for the Blackboard parser and CoT extraction
+    ├── test_api_and_database.py  # Tests for FastAPI endpoints, SQLite DB & BYOK validation
+    └── test_persona_and_rules.py # Integrity tests for the persona's inviolable rules
+```
 
 ---
 
-## Contributing
+## 🚀 How to Run Conrad
 
-Contributions are what make the open-source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
+### Option 1: Local Web Application (Streamlit)
 
-1.  **Fork** the Project.
-2.  **Create your Feature Branch** (`git checkout -b feature/AmazingFeature`).
-3.  **Commit your Changes** (`git commit -m 'Add some AmazingFeature'`).
-4.  **Push to the Branch** (`git push origin feature/AmazingFeature`).
-5.  **Open a Pull Request**.
+1. **Clone the repository and navigate into the project folder:**
+   ```bash
+   git clone https://github.com/EnricoSouzaAfonso/Conrad.git
+   cd Conrad
+   ```
+
+2. **Create a virtual environment and install dependencies:**
+   ```bash
+   python -m venv .venv
+   # On Windows (PowerShell):
+   .\.venv\Scripts\Activate.ps1
+   # On Linux/macOS:
+   source .venv/bin/activate
+
+   pip install -r requirements.txt
+   ```
+
+3. **Launch the Web Application:**
+   ```bash
+   streamlit run app.py
+   ```
+
+4. **Configure your API Key (BYOK):**
+   - Open `http://localhost:8501` in your browser.
+   - In the left sidebar (**"🔑 Chave da API Gemini (BYOK)"**), paste your free key from [Google AI Studio](https://aistudio.google.com/app/apikey) and click **"Salvar e Validar Chave"** (or set `GOOGLE_API_KEY` in a `.env` file).
 
 ---
 
-## Developed by
+### Option 2: Docker Container
 
-By **Enrico Souza Afonso** on May 17, 2025, during the Alura Gemini Immersion.
+To spin up both the Web Application (`port 8501`) and the FastAPI backend (`port 8000`) in isolated containers:
+
+```bash
+docker-compose up --build
+```
+
+- **Web Interface (Streamlit):** `http://localhost:8501`
+- **Interactive API Documentation (Swagger UI):** `http://localhost:8000/docs`
 
 ---
 
-## License
-This project is licensed under the **Creative Commons CC-BY-NC 4.0**.
+### Option 3: Google Colab
+
+You can also run Conrad directly in the cloud with zero local setup:
+
+1. Click the badge below to open the official notebook in Google Colab:
+
+   [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/EnricoSouzaAfonso/Conrad/blob/main/Conrad.ipynb)
+
+2. In the left sidebar of Google Colab, click the **Key (Secrets)** icon and add a secret named `GOOGLE_API_KEY` with your key from [Google AI Studio](https://aistudio.google.com/app/apikey).
+3. Run the cells sequentially to install `google-genai` and launch the interactive interface.
+
+---
+
+## 🛠️ Technologies Used
+
+- **Core Language:** [Python 3.11+](https://www.python.org/)
+- **Generative AI SDK:** [Google GenAI SDK (`google-genai`)](https://ai.google.dev/) — Models `gemini-3.8-flash` (default, 1M tokens), `gemini-2.5-pro`, `gemini-2.5-flash`, and `gemini-2.5-flash-lite`
+- **Web Frontend:** [Streamlit](https://streamlit.io/) + Modern CSS3 (`100dvh` Viewport, Floating Input Dock, Glassmorphism)
+- **Scientific Rendering & Diagrams:** [MathJax v3](https://www.mathjax.org/) (LaTeX/TeX) and [Mermaid.js v10](https://mermaid.js.org/)
+- **Backend & Persistence:** [FastAPI](https://fastapi.tiangolo.com/), [SQLAlchemy](https://www.sqlalchemy.org/), and [SQLite](https://www.sqlite.org/)
+- **Document Export:** [FPDF2 (`fpdf2`)](https://py-pdf.github.io/fpdf2/) and [Markdown2](https://github.com/trentm/python-markdown2)
+- **Containerization & Notebook:** [Docker](https://www.docker.com/) and [IPython Widgets (`ipywidgets`)](https://ipywidgets.readthedocs.io/en/stable/)
+
+---
+
+## 🎯 Pedagogical Modes
+
+In Conrad's sidebar, you can switch in real time between **4 specialized teaching modes**:
+
+| Pedagogical Mode | Didactic Goal | Conrad's Behavior |
+| :--- | :--- | :--- |
+| **🎓 Pure Socratic (Default)** | Autonomous concept building from first principles | Guides the student with inductive questions and graduated hints without ever handing out ready-made answers. |
+| **📝 Exam & Challenge Mode** | Rigorous preparation for exams and competitions | Presents contextualized challenge problems, evaluates step-by-step justifications, and demands formal rigor. |
+| **💻 Software Architect (Code Review)** | Software engineering, algorithms, and debugging | Analyzes Big-O complexity ($O(n)$, $O(\log n)$), clean code, and edge cases without rewriting the entire program for the student. |
+| **🔄 Feynman Method (Role Reversal)** | Deep consolidation and blind-spot detection | Conrad takes on the role of a curious apprentice and asks **you** to explain the topic in your own words, probing logical gaps. |
+
+---
+
+## 📜 Version History
+
+For a detailed log of all releases, architectural milestones, and bug fixes following *Keep a Changelog* and *Semantic Versioning*, see [**CHANGELOG.md**](CHANGELOG.md).
+
+---
+
+## 🤝 Contributing
+
+Contributions are warmly welcomed! To help improve Conrad:
+
+1. **Fork** the project.
+2. **Create a Feature Branch** (`git checkout -b feat/MyInnovation`).
+3. **Run the official QA & Governance suite** (`python tests/qa_visual_inspection.py`).
+4. **Commit your changes** following *Conventional Commits* (`git commit -m 'feat: add MyInnovation'`).
+5. **Push to the branch** (`git push origin feat/MyInnovation`) and open a **Pull Request**.
+
+---
+
+## 👨‍💻 Developed by
+
+Conceived and developed by **Enrico Souza Afonso** (originally created on May 17, 2025, during the Alura Gemini Immersion and continuously evolved into the v3.3 Web & Cognitive architecture).
+
+---
+
+## 📄 License
+
+This project is licensed under the **Creative Commons Attribution-NonCommercial 4.0 International (CC-BY-NC 4.0)** license.
 
 [![License: CC BY-NC 4.0](https://licensebuttons.net/l/by-nc/4.0/88x31.png)](https://creativecommons.org/licenses/by-nc/4.0/)
 
-You can learn more about this license [here](https://creativecommons.org/licenses/by-nc/4.0/).
+You can read the full license terms in the [LICENSE](LICENSE) file or at [creativecommons.org/licenses/by-nc/4.0](https://creativecommons.org/licenses/by-nc/4.0/).

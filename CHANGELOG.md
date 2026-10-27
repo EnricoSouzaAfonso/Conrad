@@ -5,6 +5,11 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [3.3.0] - 27/10/2026
+
+### Documentação
+- **Atualização Integral dos READMEs Oficiais em Português e Inglês (`README(PT-BR).md`, `README(ENG).md`):** Reescrita completa e espelhada da documentação oficial da arquitetura v3.3, preservando o layout clássico (logo centralizado, badges tecnológicos e sumário navegável) e documentando o SDK `google-genai` (`gemini-3.8-flash` 1M tokens), aplicação Web Streamlit, API FastAPI, containerização Docker, Quadro Negro Retrátil com *Auto-Reveal*, 4 Modos Pedagógicos científicos, Sistema BYOK, Caderno Digital em PDF/Markdown e Floating Input Dock.
+
 ## [3.2.1] - 27/10/2026
 
 ### Corrigido

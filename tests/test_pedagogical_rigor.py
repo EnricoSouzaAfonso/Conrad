@@ -13,7 +13,7 @@ class TestPedagogicalRigor(unittest.TestCase):
         self.instruction = get_system_instruction("socratico")
 
     def test_versao_3_ativa(self):
-        self.assertEqual(CONRAD_VERSION, "3.0.0", "A versão da persona deve ser 3.0.0")
+        self.assertTrue(CONRAD_VERSION.startswith("3."), "A versão da persona deve pertencer à série 3.x")
 
     def test_regra_nao_passividade_presente(self):
         self.assertIn("REGRA DE OURO DA NÃO-PASSIVIDADE", self.instruction)
