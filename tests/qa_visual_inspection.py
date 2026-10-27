@@ -252,7 +252,15 @@ def run_qa_suite():
     assert artifact is not None, "Falha: Artifact não foi extraído corretamente!"
     assert artifact.type == "math", "Falha: Tipo de artifact incorreto!"
     assert "\\int_a^b" in artifact.content, "Falha: Conteúdo da fórmula corrompido!"
-    print("✅ Parser do Canvas: Fórmulas capturadas e estruturadas com perfeição!")
+
+    with open(os.path.join(ROOT_DIR, "app.py"), "r", encoding="utf-8") as app_f:
+        app_src = app_f.read()
+    assert "height: 100dvh !important;" in app_src, "Falha: Reset de viewport 100dvh ausente!"
+    assert 'div[data-testid="stColumn"]:first-child' in app_src, "Falha: Scrollbar unificada da coluna de chat ausente!"
+    assert "border-radius: 28px !important;" in app_src, "Falha: Estilo do Floating Input Dock ausente!"
+    assert 'id="jump-to-bottom-btn"' in app_src, "Falha: Botão scroll-to-bottom ausente!"
+    assert 'class="chat-bottom-spacer"' in app_src, "Falha: Espaçador .chat-bottom-spacer ausente!"
+    print("✅ Parser do Canvas, Viewport 100dvh Unificado e Floating Input Dock: 100% íntegros!")
 
     # 4. Relatório e Registro de Screenshots
     print("\n[Passo 4/4] Gerando evidências de teste em tests/screenshots/...")

@@ -1,8 +1,8 @@
 """
-Interface Web Autônoma do Conrad — Versão 2.6.2 (Chaos & Edge-Case Hardened)
-Engenharia de QA, Validação Canônica de API Key (Zero Falso-Positivo),
-Streaming Throttled (40ms / 25fps), Encapsulamento Estrito do Quadro Negro (st.container(border=True)),
-Layout Sticky Bottom, Blindagem Zero-Crash (429/Timeout) e Reparo de LaTeX/Mermaid.
+Interface Web Autônoma do Conrad — Versão 3.1.1
+Viewport de Alta Precisão (100dvh), Extinção da Barra Dupla de Rolagem (Scrollbar Unificada),
+Floating Input Dock Estilo Gemini/Claude/Grok, Botão Scroll-to-Bottom (↓),
+Prompt Mestre v3.0 (Bloom, Sweller, Vygotsky & Dweck) e Quadro Negro Encapsulado.
 """
 import os
 import re
@@ -27,7 +27,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# CSS para Dark Mode, Layout Sticky Bottom, Scroll Independente (css-layout) e Tipografia Resiliente
+# CSS: Reset de Viewport 100dvh, Scrollbar Unificada e Floating Input Dock (Plano 5)
 st.markdown(
     """
 <style>
@@ -52,29 +52,132 @@ st.markdown(
       word-break: break-word;
   }
 
-  /* Contêiner de mensagens com scroll independente e estabilidade (css-layout) */
-  .chat-scroll-area,
-  .st-key-chat_scroll_area {
-      max-height: calc(100dvh - 220px);
-      overflow-y: auto;
-      scrollbar-gutter: stable;
-      overscroll-behavior: contain;
-      min-inline-size: 0;
-      padding-right: 8px;
-      margin-bottom: 16px;
+  /* ==============================================================================
+     RESET DE VIEWPORT E UNIFICAÇÃO DE SCROLLBAR (PADRÃO GEMINI / CLAUDE)
+     ============================================================================== */
+
+  /* 1. Trava a raiz para evitar scroll duplo no body da página */
+  html, body, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
+      height: 100dvh !important;
+      max-height: 100dvh !important;
+      overflow: hidden !important;
   }
 
-  /* Barra de perguntas fixa no rodapé com efeito vidro (glassmorphism) */
-  .stChatInput,
-  div[data-testid="stChatInput"] {
-      position: sticky !important;
-      bottom: 0 !important;
-      z-index: 999 !important;
-      background: rgba(18, 18, 18, 0.85) !important;
-      backdrop-filter: blur(12px) !important;
-      -webkit-backdrop-filter: blur(12px) !important;
-      padding-top: 10px !important;
-      padding-bottom: 10px !important;
+  /* 2. O contêiner principal ocupa exatamente a altura da tela */
+  [data-testid="stMainBlockContainer"] {
+      height: 100dvh !important;
+      max-height: 100dvh !important;
+      padding-top: 1.5rem !important;
+      padding-bottom: 0 !important;
+      overflow: hidden !important;
+  }
+
+  /* 3. Coluna de Chat: Única área de rolagem vertical da esquerda */
+  div[data-testid="stColumn"]:first-child {
+      --scrollbar-thumb: #333333;
+      --scrollbar-track: transparent;
+      height: calc(100dvh - 90px) !important;
+      overflow-y: auto !important;
+      scrollbar-gutter: stable !important;
+      scrollbar-width: thin;
+      scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+      overscroll-behavior: contain !important;
+      min-inline-size: 0 !important;
+      padding-right: 12px !important;
+      padding-bottom: 140px !important; /* Espaço reservado para o Floating Dock */
+  }
+
+  /* 4. Coluna do Quadro Negro: Altura proporcional e scroll independente */
+  div[data-testid="stColumn"]:last-child {
+      --scrollbar-thumb: #333333;
+      --scrollbar-track: transparent;
+      height: calc(100dvh - 90px) !important;
+      overflow-y: auto !important;
+      scrollbar-gutter: stable !important;
+      scrollbar-width: thin;
+      scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+      overscroll-behavior: contain !important;
+      min-inline-size: 0 !important;
+      padding-right: 8px !important;
+  }
+
+  /* 5. Customização da Scrollbar (Ultra-fina, elegante e discreta + fallback WebKit) */
+  @supports not (scrollbar-color: auto) {
+      ::-webkit-scrollbar {
+          width: 6px !important;
+          height: 6px !important;
+      }
+      ::-webkit-scrollbar-track {
+          background: var(--scrollbar-track, transparent) !important;
+      }
+      ::-webkit-scrollbar-thumb {
+          background: var(--scrollbar-thumb, #333333) !important;
+          border-radius: 4px !important;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+          background: #555555 !important;
+      }
+  }
+  ::-webkit-scrollbar {
+      width: 6px !important;
+      height: 6px !important;
+  }
+  ::-webkit-scrollbar-track {
+      background: transparent !important;
+  }
+  ::-webkit-scrollbar-thumb {
+      background: #333333 !important;
+      border-radius: 4px !important;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+      background: #555555 !important;
+  }
+
+  /* ==============================================================================
+     FLOATING INPUT DOCK ESTILO GEMINI / CLAUDE / GROK
+     ============================================================================== */
+
+  /* 1. Fixa a barra de input permanentemente no rodapé da tela */
+  div[data-testid="stChatInput"],
+  .stChatInput {
+      position: fixed !important;
+      bottom: 24px !important;
+      z-index: 1000 !important;
+      width: 44% !important;
+      max-width: 54% !important; /* Proporcional à coluna de chat */
+      left: calc(21rem + 2rem) !important; /* Alinhado após a Sidebar */
+      background: rgba(22, 22, 22, 0.85) !important;
+      backdrop-filter: blur(16px) !important;
+      -webkit-backdrop-filter: blur(16px) !important;
+      border: 1px solid rgba(255, 255, 255, 0.12) !important;
+      border-radius: 28px !important;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5) !important;
+      padding: 4px 10px !important;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+  }
+
+  /* 2. Destaque ao focar no campo de digitação */
+  div[data-testid="stChatInput"]:focus-within,
+  .stChatInput:focus-within {
+      border-color: #C59B27 !important;
+      box-shadow: 0 10px 35px rgba(197, 155, 39, 0.25) !important;
+  }
+
+  /* 3. Ajuste responsivo caso a sidebar esteja colapsada ou em telas menores */
+  @media (max-width: 1024px) {
+      div[data-testid="stChatInput"],
+      .stChatInput {
+          width: 90% !important;
+          max-width: 90% !important;
+          left: 5% !important;
+      }
+  }
+
+  /* 4. Espaçamento de segurança no final do chat (Garante que a última mensagem não seja coberta) */
+  .chat-bottom-spacer {
+      height: 120px !important;
+      width: 100% !important;
+      clear: both !important;
   }
 
   /* Estilização elegante da moldura do Quadro Negro e proteção contra overflow de matrizes extensas */
@@ -102,7 +205,7 @@ st.markdown(
   }
 
   @media print {
-      header, footer, [data-testid="stSidebar"], .stChatInput { display: none !important; }
+      header, footer, [data-testid="stSidebar"], .stChatInput, #jump-to-bottom-btn { display: none !important; }
       .stApp { background: white !important; color: black !important; }
   }
 </style>
@@ -338,6 +441,11 @@ with st.sidebar:
 
 
 # ==============================================================================
+# --- FLOATING INPUT DOCK (FORA DO FLUXO DESCENDENTE PARA FIXAÇÃO IMÓVEL) ---
+# ==============================================================================
+prompt = st.chat_input("Como posso ajudar seus estudos hoje? (digite 'fim' para encerrar)")
+
+# ==============================================================================
 # --- ÁREA PRINCIPAL: LAYOUT SPLIT-VIEW (CHAT À ESQUERDA | CANVAS À DIREITA) ---
 # ==============================================================================
 col_chat, col_canvas = st.columns([1.1, 0.9], gap="medium")
@@ -348,19 +456,6 @@ with col_chat:
         f"Modo: **{PEDAGOGICAL_MODES[st.session_state.current_mode]['nome']}** | Modelo: `{st.session_state.engine.model_name}`"
     )
 
-    # Contêiner de mensagens com rolagem independente (.st-key-chat_scroll_area / .chat-scroll-area)
-    chat_scroll_container = st.container(key="chat_scroll_area")
-    with chat_scroll_container:
-        for msg in st.session_state.messages:
-            with st.chat_message(msg["role"], avatar="🎩" if msg["role"] == "assistant" else None):
-                if msg["role"] == "assistant" and msg.get("show_cot", False):
-                    _render_cot_details(msg.get("thought") or "")
-                if msg.get("media_bytes") and msg.get("mime_type", "").startswith("image/"):
-                    st.image(msg["media_bytes"], width=220)
-                elif msg.get("media_name"):
-                    st.caption(f"📄 Arquivo anexado: `{msg['media_name']}`")
-                st.markdown(msg["content"])
-
     # Widget Multimodal de Upload de Fotos de Caderno e PDFs de Listas
     uploaded_file = st.file_uploader(
         "📎 Anexar foto do caderno, lista ou PDF de estudos:",
@@ -368,8 +463,19 @@ with col_chat:
         key="study_media_uploader",
     )
 
-    # Input do aluno (fixado no rodapé via CSS position: sticky)
-    if prompt := st.chat_input("Como posso ajudar seus estudos hoje? (digite 'fim' para encerrar)"):
+    # Renderização das mensagens em trilha única (sem container de scroll aninhado)
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"], avatar="🎩" if msg["role"] == "assistant" else None):
+            if msg["role"] == "assistant" and msg.get("show_cot", False):
+                _render_cot_details(msg.get("thought") or "")
+            if msg.get("media_bytes") and msg.get("mime_type", "").startswith("image/"):
+                st.image(msg["media_bytes"], width=220)
+            elif msg.get("media_name"):
+                st.caption(f"📄 Arquivo anexado: `{msg['media_name']}`")
+            st.markdown(msg["content"])
+
+    # Processamento da nova mensagem submetida no Floating Input Dock
+    if prompt:
         media_bytes = None
         mime_type = None
         media_name = None
@@ -389,107 +495,152 @@ with col_chat:
                 "media_name": media_name,
             }
         )
-        with chat_scroll_container:
-            with st.chat_message("user"):
-                if media_bytes and mime_type and mime_type.startswith("image/"):
-                    st.image(uploaded_file, width=220)
-                elif media_name:
-                    st.caption(f"📄 Arquivo anexado: `{media_name}`")
-                st.markdown(prompt)
+        with st.chat_message("user"):
+            if media_bytes and mime_type and mime_type.startswith("image/"):
+                st.image(uploaded_file, width=220)
+            elif media_name:
+                st.caption(f"📄 Arquivo anexado: `{media_name}`")
+            st.markdown(prompt)
 
-            with st.chat_message("assistant", avatar="🎩"):
-                # Caso 0: Prompt em branco sem anexo
-                if not prompt.strip() and not media_bytes:
-                    st.markdown(MSG_EMPTY_PROMPT)
-                    st.session_state.messages.append(
-                        {"role": "assistant", "content": MSG_EMPTY_PROMPT, "show_cot": False}
-                    )
-                # Caso 1: Ausência de API Key — Resposta pré-programada graciosa (Zero Crash)
-                elif not st.session_state.engine.api_key:
-                    missing_msg = get_missing_key_message()
-                    st.markdown(missing_msg)
-                    st.session_state.messages.append(
-                        {"role": "assistant", "content": missing_msg, "show_cot": False}
-                    )
-                # Caso 2: Comando estrito de encerramento
-                elif prompt.strip() == "fim":
-                    farewell_msg = (
-                        "Foi um prazer enorme explorar o conhecimento com você! "
-                        "Lembre-se de revisar os conceitos que discutimos hoje para consolidar seu aprendizado. Até a próxima! 🎩"
-                    )
-                    st.markdown(farewell_msg)
-                    st.session_state.messages.append(
-                        {"role": "assistant", "content": farewell_msg, "show_cot": False}
-                    )
-                # Caso 3: Envio Multimodal ou Streaming Throttled (40ms) + Blindagem Zero Crash
-                else:
-                    cot_slot = st.empty()
-                    with cot_slot.container():
-                        _render_cot_details()
+        with st.chat_message("assistant", avatar="🎩"):
+            # Caso 0: Prompt em branco sem anexo
+            if not prompt.strip() and not media_bytes:
+                st.markdown(MSG_EMPTY_PROMPT)
+                st.session_state.messages.append(
+                    {"role": "assistant", "content": MSG_EMPTY_PROMPT, "show_cot": False}
+                )
+            # Caso 1: Ausência de API Key — Resposta pré-programada graciosa (Zero Crash)
+            elif not st.session_state.engine.api_key:
+                missing_msg = get_missing_key_message()
+                st.markdown(missing_msg)
+                st.session_state.messages.append(
+                    {"role": "assistant", "content": missing_msg, "show_cot": False}
+                )
+            # Caso 2: Comando estrito de encerramento
+            elif prompt.strip() == "fim":
+                farewell_msg = (
+                    "Foi um prazer enorme explorar o conhecimento com você! "
+                    "Lembre-se de revisar os conceitos que discutimos hoje para consolidar seu aprendizado. Até a próxima! 🎩"
+                )
+                st.markdown(farewell_msg)
+                st.session_state.messages.append(
+                    {"role": "assistant", "content": farewell_msg, "show_cot": False}
+                )
+            # Caso 3: Envio Multimodal ou Streaming Throttled (40ms) + Blindagem Zero Crash
+            else:
+                cot_slot = st.empty()
+                with cot_slot.container():
+                    _render_cot_details()
 
-                    memory_summary = (
-                        f"Pontos fortes: {cognitive_profile['strengths']} | "
-                        f"Dificuldades em evolução: {cognitive_profile['difficulties']} | "
-                        f"Estilo de aprendizado: {cognitive_profile['learning_style']} | "
-                        f"Notas: {cognitive_profile['pedagogical_notes']}"
-                    )
-                    memory_prefix = st.session_state.engine.build_context_with_memory(memory_summary)
+                memory_summary = (
+                    f"Pontos fortes: {cognitive_profile['strengths']} | "
+                    f"Dificuldades em evolução: {cognitive_profile['difficulties']} | "
+                    f"Estilo de aprendizado: {cognitive_profile['learning_style']} | "
+                    f"Notas: {cognitive_profile['pedagogical_notes']}"
+                )
+                memory_prefix = st.session_state.engine.build_context_with_memory(memory_summary)
 
-                    response_placeholder = st.empty()
-                    full_text = ""
+                response_placeholder = st.empty()
+                full_text = ""
 
-                    try:
-                        if media_bytes and mime_type:
-                            multimodal_prompt = (
-                                f"{memory_prefix}"
-                                "Transcreva o enunciado ou equação deste material para o Quadro Negro usando "
-                                '<conrad_artifact type="math" title="Enunciado Transcrito"> (ou o tipo mais adequado) '
-                                "e comece guiando o estudante com uma pergunta indutiva sobre o primeiro passo.\n\n"
-                                f"Mensagem do estudante: {prompt}"
+                try:
+                    if media_bytes and mime_type:
+                        multimodal_prompt = (
+                            f"{memory_prefix}"
+                            "Transcreva o enunciado ou equação deste material para o Quadro Negro usando "
+                            '<conrad_artifact type="math" title="Enunciado Transcrito"> (ou o tipo mais adequado) '
+                            "e comece guiando o estudante com uma pergunta indutiva sobre o primeiro passo.\n\n"
+                            f"Mensagem do estudante: {prompt}"
+                        )
+                        with st.spinner("Analisando foto/documento anexado e preparando o Quadro Negro..."):
+                            full_text = st.session_state.engine.send_message_multimodal(
+                                prompt=multimodal_prompt,
+                                media_bytes=media_bytes,
+                                mime_type=mime_type,
                             )
-                            with st.spinner("Analisando foto/documento anexado e preparando o Quadro Negro..."):
-                                full_text = st.session_state.engine.send_message_multimodal(
-                                    prompt=multimodal_prompt,
-                                    media_bytes=media_bytes,
-                                    mime_type=mime_type,
-                                )
-                        else:
-                            contextual_prompt = f"{memory_prefix}{prompt}"
-                            last_render_time = time.time()
-                            RENDER_THROTTLE_SECONDS = 0.04  # Atualiza a tela a cada 40ms (~25 fps), suave e ultra-rápido
+                    else:
+                        contextual_prompt = f"{memory_prefix}{prompt}"
+                        last_render_time = time.time()
+                        RENDER_THROTTLE_SECONDS = 0.04  # Atualiza a tela a cada 40ms (~25 fps), suave e ultra-rápido
 
-                            for chunk in st.session_state.engine.send_message_stream(contextual_prompt):
-                                full_text += chunk
-                                now = time.time()
-                                if now - last_render_time > RENDER_THROTTLE_SECONDS:
-                                    # Apenas durante a geração: preview simples sem regex pesado a cada caractere
-                                    response_placeholder.markdown(full_text + "▌")
-                                    last_render_time = now
-                    except Exception as exc:
-                        full_text = ConradEngine._format_resilient_error(exc)
+                        for chunk in st.session_state.engine.send_message_stream(contextual_prompt):
+                            full_text += chunk
+                            now = time.time()
+                            if now - last_render_time > RENDER_THROTTLE_SECONDS:
+                                # Apenas durante a geração: preview simples sem regex pesado a cada caractere
+                                response_placeholder.markdown(full_text + "▌")
+                                last_render_time = now
+                except Exception as exc:
+                    full_text = ConradEngine._format_resilient_error(exc)
 
-                    # Ao terminar o streaming: executa o parse final completo de uma única vez
-                    text_without_thought, extracted_thought = CanvasParser.parse_thought(full_text)
-                    if extracted_thought:
-                        with cot_slot.container():
-                            _render_cot_details(extracted_thought)
+                # Ao terminar o streaming: executa o parse final completo de uma única vez
+                text_without_thought, extracted_thought = CanvasParser.parse_thought(full_text)
+                if extracted_thought:
+                    with cot_slot.container():
+                        _render_cot_details(extracted_thought)
 
-                    clean_chat_text, artifact = CanvasParser.parse_message(text_without_thought)
-                    response_placeholder.markdown(clean_chat_text)
+                clean_chat_text, artifact = CanvasParser.parse_message(text_without_thought)
+                response_placeholder.markdown(clean_chat_text)
 
-                    if artifact:
-                        st.session_state.active_artifact = artifact
+                if artifact:
+                    st.session_state.active_artifact = artifact
 
-                    st.session_state.messages.append(
-                        {
-                            "role": "assistant",
-                            "content": clean_chat_text,
-                            "show_cot": True,
-                            "thought": extracted_thought,
-                            "artifact": artifact,
-                        }
-                    )
-                    st.session_state.cached_tokens = st.session_state.engine.count_tokens()
+                st.session_state.messages.append(
+                    {
+                        "role": "assistant",
+                        "content": clean_chat_text,
+                        "show_cot": True,
+                        "thought": extracted_thought,
+                        "artifact": artifact,
+                    }
+                )
+                st.session_state.cached_tokens = st.session_state.engine.count_tokens()
+
+    # Âncora de espaçamento final e Botão Flutuante "Rolar para o Fim" (↓)
+    st.markdown(
+        """
+<div id="chat-bottom-anchor" class="chat-bottom-spacer"></div>
+
+<button id="jump-to-bottom-btn" title="Rolar para as mensagens recentes" onclick="
+    const chatCol = document.querySelector('div[data-testid=\\'stColumn\\']:first-child');
+    if (chatCol) {
+        chatCol.scrollTo({ top: chatCol.scrollHeight, behavior: 'smooth' });
+    }
+">
+    ↓
+</button>
+
+<style>
+#jump-to-bottom-btn {
+    position: fixed;
+    bottom: 95px;
+    left: calc(21rem + 2rem + 22%);
+    transform: translateX(-50%);
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background-color: #262626;
+    color: #f0f0f0;
+    border: 1px solid #444;
+    cursor: pointer;
+    z-index: 999;
+    font-size: 16px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    transition: background-color 0.2s ease, transform 0.2s ease;
+}
+#jump-to-bottom-btn:hover {
+    background-color: #333333;
+    border-color: #C59B27;
+    transform: translateX(-50%) scale(1.08);
+}
+</style>
+""",
+        unsafe_allow_html=True,
+    )
 
 # Atualiza o Termômetro de Retenção e Contador de Tokens na Sidebar sem bloquear o carregamento inicial
 with stats_placeholder.container():

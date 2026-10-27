@@ -1,10 +1,17 @@
-﻿# 📝 Changelog
+# 📝 Changelog
 
 Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [3.1.1] - 27/10/2026
+
+### Adicionado
+- **Floating Input Dock Estilo Gemini/Claude/Grok (`app.py`):** Ancoragem da barra de perguntas (`div[data-testid="stChatInput"]`) fora do fluxo descendente com `position: fixed; bottom: 24px; border-radius: 28px; backdrop-filter: blur(16px)` e destaque dourado (`#C59B27`) no foco, garantindo que o campo de digitação jamais se desloque ou suma da tela durante respostas longas.
+- **Botão Flutuante Scroll-to-Bottom (`#jump-to-bottom-btn`) e Espaçador de Segurança (`app.py`):** Adição do botão circular `↓` com rolagem suave (`scrollTo({ top: chatCol.scrollHeight, behavior: 'smooth' })`) e âncora `.chat-bottom-spacer` (`height: 120px`) para impedir que o Floating Dock cubra a última linha das mensagens.
+
+## [3.1.0] - 27/10/2026
 
 ### Corrigido
 - **Extinção da Barra Dupla de Rolagem e Unificação de Viewport 100dvh (`app.py`):** Remoção dos contêineres de scroll aninhados (`.chat-scroll-area`) e travamento estrutural de `html, body, [data-testid="stAppViewContainer"]` e `[data-testid="stMainBlockContainer"]` em `100dvh` (`overflow: hidden`), concentrando a rolagem exclusivamente nas trilhas independentes `div[data-testid="stColumn"]:first-child` e `div[data-testid="stColumn"]:last-child` com `scrollbar-gutter: stable`, `scrollbar-width: thin` e `scrollbar-color`.
