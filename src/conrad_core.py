@@ -1,4 +1,5 @@
 import os
+import re
 import html
 from typing import Optional
 from google import genai
@@ -20,6 +21,9 @@ DEFINITIVE_MODELS = {
 
 DEFAULT_MODEL_NAME = "gemini-3.8-flash"
 
+# Limite seguro de caracteres por prompt para evitar estouro de payload HTTP/DOM mantendo suporte a 20k+ chars
+MAX_SAFE_PROMPT_CHARS = 32000
+
 # Mapeamento de roteamento direto para baixa latência (TTFT < 1.5s) no endpoint AI Studio
 RUNTIME_MODEL_MAP = {
     "gemini-3.8-flash": "gemini-2.5-flash",
@@ -28,6 +32,11 @@ RUNTIME_MODEL_MAP = {
     "gemini-1.5-flash": "gemini-2.5-flash",
     "gemini-1.5-pro": "gemini-2.5-flash",
 }
+
+MSG_EMPTY_PROMPT = (
+    "🎩 Parece que sua mensagem chegou em branco! "
+    "Digite uma dúvida, fórmula matemática ou trecho de código para explorarmos juntos."
+)
 
 
 class ConradEngine:
@@ -46,13 +55,67 @@ class ConradEngine:
         self.chat = None
         self._active_runtime_model = self._get_runtime_model(self.model_name)
 
-        if self.api_key:
+        if self.api_key and self.api_key.strip():
             self._init_client_and_chat()
 
     @staticmethod
     def _get_runtime_model(model_name: str) -> str:
         """Retorna o modelo efetivo de baixa latência disponível na API."""
         return RUNTIME_MODEL_MAP.get(model_name, "gemini-2.5-flash")
+
+    @staticmethod
+    def _sanitize_prompt(prompt: Optional[str]) -> str:
+        """
+        Higieniza entradas extremas: remove caracteres de controle ASCII ilegais (\\x00-\\x08, etc.),
+        preserva emojis e quebras de linha, e trunca com segurança entradas colossais (>32k chars).
+        """
+        if prompt is None:
+            return ""
+        text = str(prompt)
+        # Remove bytes nulos e caracteres de controle não-imprimíveis exceto \t, \n, \r
+        text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", text)
+        if len(text) > MAX_SAFE_PROMPT_CHARS:
+            head = text[:24000]
+            tail = text[-6000:]
+            text = (
+                f"{head}\n\n"
+                "[... trecho intermediário truncado automaticamente para proteção de memória ...]\n\n"
+                f"{tail}"
+            )
+        return text
+
+    @staticmethod
+    def _format_resilient_error(err: Exception) -> str:
+        """
+        Traduz exceções da API (Timeout, 429 Quota, 401/403 Key Inválida, 503) em mensagens
+        pedagógicas amigáveis para garantir Zero Crash (nunca exibir tela branca/traceback).
+        """
+        raw = str(err)
+        upper = raw.upper()
+
+        if "429" in upper or "RESOURCE_EXHAUSTED" in upper or "QUOTA" in upper or "RATE_LIMIT" in upper:
+            return (
+                "⏳ **Limite de Requisições Atingido (Erro 429 — Cota da API):** "
+                "Sua chave atingiu temporariamente o limite gratuito de chamadas do Google AI Studio. "
+                "Aguarde alguns segundos antes de enviar a próxima pergunta ou insira outra chave na barra lateral! 🎩"
+            )
+        if "TIMEOUT" in upper or "TIMED OUT" in upper or "DEADLINE_EXCEEDED" in upper or "504" in upper:
+            return (
+                "⌛ **Tempo Limite Excedido (Timeout de Rede):** "
+                "O servidor demorou mais que o esperado para responder. "
+                "Seu histórico e o Quadro Negro seguem intactos — por favor, tente enviar novamente! 🎩"
+            )
+        if "API_KEY_INVALID" in upper or "UNAUTHENTICATED" in upper or "PERMISSION_DENIED" in upper or "403" in upper or "401" in upper:
+            return (
+                "🔑 **Chave de API Inválida ou Não Autorizada:** "
+                "Não foi possível autenticar sua chave junto ao Google Gemini. "
+                "Verifique os caracteres na barra lateral à esquerda e clique em *Salvar e Validar Chave*. 🎩"
+            )
+        return (
+            f"⚠️ **Oscilação Temporária na Comunicação com a IA:** "
+            f"Não foi possível concluir a geração agora ({raw[:160]}). "
+            f"Por favor, tente novamente em alguns instantes! 🎩"
+        )
 
     def _resolve_api_key(self) -> Optional[str]:
         # 1. Checa variáveis de ambiente de sistema (prioriza GEMINI_API_KEY)
@@ -81,7 +144,7 @@ class ConradEngine:
 
     def set_api_key(self, new_key: str):
         """Atualiza a chave de API e reinicializa o cliente e a sessão de chat."""
-        self.api_key = new_key.strip() if new_key else None
+        self.api_key = new_key.strip() if new_key and new_key.strip() else None
         if self.api_key:
             self._init_client_and_chat()
         else:
@@ -129,8 +192,8 @@ class ConradEngine:
             return False
 
         try:
-            # Cria cliente isolado para teste rápido
-            test_client = genai.Client(api_key=self.api_key.strip())
+            # Cria cliente isolado com timeout curto para teste rápido sem travar a UI
+            test_client = self._create_client(self.api_key.strip())
             # A chamada list() valida imediatamente a autenticação nos servidores do Google
             models_iter = test_client.models.list()
             # Consome o primeiro item para forçar o handshake da requisição
@@ -145,8 +208,12 @@ class ConradEngine:
             return False
 
     def _init_client_and_chat(self):
-        self.client = self._create_client(self.api_key)
-        self._init_chat()
+        try:
+            self.client = self._create_client(self.api_key)
+            self._init_chat()
+        except Exception:
+            self.client = None
+            self.chat = None
 
     def _build_chat_config(self) -> types.GenerateContentConfig:
         return types.GenerateContentConfig(
@@ -182,12 +249,16 @@ class ConradEngine:
         self.chat = self.client.chats.create(model=target_model, config=config)
 
     def send_message(self, prompt: str) -> str:
-        """Envia mensagem para a sessão ativa de chat e trata bloqueios, ausência de chave ou erros."""
+        """Envia mensagem para a sessão ativa de chat e trata bloqueios, ausência de chave, 429 ou timeouts (Zero Crash)."""
         if not self.api_key or not self.chat:
             return get_missing_key_message()
 
+        clean_prompt = self._sanitize_prompt(prompt)
+        if not clean_prompt.strip():
+            return MSG_EMPTY_PROMPT
+
         try:
-            response = self.chat.send_message(prompt)
+            response = self.chat.send_message(clean_prompt)
             if response and response.text:
                 return response.text
 
@@ -198,7 +269,7 @@ class ConradEngine:
             return f"(Resposta indisponível: {block_reason}. Por favor, reformule sua pergunta.)"
 
         except Exception as e:
-            raise RuntimeError(f"Erro na comunicação com a API Gemini: {str(e)}")
+            return self._format_resilient_error(e)
 
     def send_message_multimodal(
         self,
@@ -206,36 +277,47 @@ class ConradEngine:
         media_bytes: Optional[bytes] = None,
         mime_type: Optional[str] = None,
     ) -> str:
-        """Envia prompt acompanhado de mídia binária (imagem ou PDF)."""
-        if not self.chat:
-            raise RuntimeError("Sessão de chat não inicializada.")
+        """Envia prompt acompanhado de mídia binária (imagem ou PDF) com resiliência Zero Crash."""
+        if not self.api_key or not self.chat:
+            return get_missing_key_message()
 
+        clean_prompt = self._sanitize_prompt(prompt)
         contents = []
         if media_bytes and mime_type:
             part = types.Part.from_bytes(data=media_bytes, mime_type=mime_type)
             contents.append(part)
 
-        contents.append(prompt or "Por favor, analise este material e me guie no entendimento do exercício.")
+        effective_text = clean_prompt.strip() or "Por favor, analise este material e me guie no entendimento do exercício."
+        contents.append(effective_text)
 
         try:
             response = self.chat.send_message(contents)
             return response.text if (response and response.text) else "(Sem resposta textual da API)"
         except Exception as e:
-            raise RuntimeError(f"Erro ao processar conteúdo multimodal: {str(e)}")
+            return self._format_resilient_error(e)
 
     def send_message_stream(self, prompt: str):
-        """Envia mensagem e gera chunks de texto em streaming (tempo real) com baixa latência."""
+        """Envia mensagem e gera chunks de texto em streaming (tempo real) com blindagem Zero Crash."""
         if not self.api_key or not self.chat:
             yield get_missing_key_message()
             return
 
+        clean_prompt = self._sanitize_prompt(prompt)
+        if not clean_prompt.strip():
+            yield MSG_EMPTY_PROMPT
+            return
+
         try:
-            response_stream = self.chat.send_message_stream(prompt)
+            yielded_any = False
+            response_stream = self.chat.send_message_stream(clean_prompt)
             for chunk in response_stream:
-                if chunk.text:
+                if getattr(chunk, "text", None):
+                    yielded_any = True
                     yield chunk.text
+            if not yielded_any:
+                yield "(O modelo concluiu a requisição sem gerar texto adicional.)"
         except Exception as e:
-            yield f"(Erro no streaming: {str(e)})"
+            yield self._format_resilient_error(e)
 
     def count_tokens(self, contents=None) -> int:
         """Calcula o consumo de tokens atual de forma resiliente e rápida."""

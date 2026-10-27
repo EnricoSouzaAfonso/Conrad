@@ -2,14 +2,15 @@
 Módulo de Métricas e Termômetro de Retenção Cognitiva.
 Avalia o grau de autonomia e engajamento do estudante durante a sessão socrática.
 """
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 
 class CognitiveRetentionTracker:
     @classmethod
-    def evaluate_session(cls, messages: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Calcula o índice de autonomia e retenção cognitiva da sessão."""
-        total_user_msgs = sum(1 for m in messages if m.get("role") == "user")
+    def evaluate_session(cls, messages: Optional[List[Dict[str, Any]]]) -> Dict[str, Any]:
+        """Calcula o índice de autonomia e retenção cognitiva da sessão com resiliência a entradas vazias/nulas."""
+        safe_msgs = [m for m in (messages or []) if isinstance(m, dict)]
+        total_user_msgs = sum(1 for m in safe_msgs if m.get("role") == "user")
         if total_user_msgs == 0:
             return {
                 "score": 0,
@@ -19,8 +20,8 @@ class CognitiveRetentionTracker:
 
         # Medição heurística baseada no engajamento e tamanho médio de resposta do aluno
         user_words = sum(
-            len(str(m.get("content", "")).split())
-            for m in messages
+            len(str(m.get("content") or "").split())
+            for m in safe_msgs
             if m.get("role") == "user"
         )
         avg_words = user_words / total_user_msgs

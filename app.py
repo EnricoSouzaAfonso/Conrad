@@ -1,15 +1,15 @@
 """
-Interface Web Autônoma do Conrad — Versão 2.6.2
+Interface Web Autônoma do Conrad — Versão 2.6.2 (Chaos & Edge-Case Hardened)
 Engenharia de QA, Validação Canônica de API Key (Zero Falso-Positivo),
-Streaming Throttled (40ms / 25fps), Encapsulamento Estrito do Quadro Negro (st.container(border=True))
-e Layout Sticky Bottom para a Área de Perguntas.
+Streaming Throttled (40ms / 25fps), Encapsulamento Estrito do Quadro Negro (st.container(border=True)),
+Layout Sticky Bottom, Blindagem Zero-Crash (429/Timeout) e Reparo de LaTeX/Mermaid.
 """
 import os
 import re
 import time
 import html
 import streamlit as st
-from src.conrad_core import ConradEngine, DEFINITIVE_MODELS, DEFAULT_MODEL_NAME
+from src.conrad_core import ConradEngine, DEFINITIVE_MODELS, DEFAULT_MODEL_NAME, MSG_EMPTY_PROMPT
 from src.conrad_persona import get_missing_key_message, PEDAGOGICAL_MODES
 from src.conrad_canvas import CanvasParser
 from src.conrad_report import ConradNotebookCompiler
@@ -27,20 +27,39 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# CSS para Dark Mode, Layout Sticky Bottom, Scroll Independente (css-layout) e Moldura do Quadro Negro
+# CSS para Dark Mode, Layout Sticky Bottom, Scroll Independente (css-layout) e Tipografia Resiliente
 st.markdown(
     """
 <style>
   .stApp { background-color: #121212; color: #e0e0e0; }
-  .stChatMessage { border-radius: 8px; margin-bottom: 10px; }
+  .stChatMessage {
+      border-radius: 8px;
+      margin-bottom: 10px;
+      min-inline-size: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+  }
 
-  /* Contêiner de mensagens com scroll independente e estabilidade */
+  /* Tipografia moderna (improve-text-layout-and-legibility) */
+  h1, h2, h3, h4, h5, h6 {
+      text-wrap: balance;
+  }
+  .stChatMessage p,
+  .stChatMessage li,
+  .stChatMessage blockquote {
+      text-wrap: pretty;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+  }
+
+  /* Contêiner de mensagens com scroll independente e estabilidade (css-layout) */
   .chat-scroll-area,
   .st-key-chat_scroll_area {
       max-height: calc(100dvh - 220px);
       overflow-y: auto;
       scrollbar-gutter: stable;
       overscroll-behavior: contain;
+      min-inline-size: 0;
       padding-right: 8px;
       margin-bottom: 16px;
   }
@@ -58,11 +77,19 @@ st.markdown(
       padding-bottom: 10px !important;
   }
 
-  /* Estilização elegante da moldura do Quadro Negro */
+  /* Estilização elegante da moldura do Quadro Negro e proteção contra overflow de matrizes extensas */
   div[data-testid="stVerticalBlockBorderWrapper"] {
       background-color: #161616 !important;
       border: 1px solid #333333 !important;
       border-radius: 10px !important;
+      min-inline-size: 0 !important;
+      overflow-wrap: anywhere !important;
+  }
+  .katex-display,
+  mjx-container {
+      overflow-x: auto;
+      overflow-y: hidden;
+      max-inline-size: 100%;
   }
 
   .token-badge {
@@ -90,7 +117,7 @@ st.markdown(
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <script>
   if (window.mermaid) {
-    mermaid.initialize({ startOnLoad: true, theme: 'dark' });
+    mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'strict' });
   }
 </script>
 """,
@@ -177,8 +204,8 @@ def _render_cot_details(thought_text: str = ""):
 
 def _clean_code_or_mermaid_fence(content: str, expected_lang: str = "") -> str:
     """Remove cercas markdown redundantes caso o modelo as inclua dentro do artifact."""
-    stripped = content.strip()
-    pattern = rf"^```(?:{expected_lang}|\w+)?\s*\n(.*?)\n```$"
+    stripped = (content or "").strip()
+    pattern = rf"^```(?:{expected_lang}|\w+)?\s*\n(.*?)(?:\n```)?$"
     match = re.match(pattern, stripped, flags=re.DOTALL | re.IGNORECASE)
     if match:
         return match.group(1).strip()
@@ -190,7 +217,7 @@ def _format_math_for_canvas(content: str) -> str:
     formatted = re.sub(
         r"\$\$\s*(.*?)\s*\$\$",
         lambda m: f"\n\n$$\n{m.group(1).strip()}\n$$\n\n",
-        content.strip(),
+        (content or "").strip(),
         flags=re.DOTALL,
     )
     return re.sub(r"\n{3,}", "\n\n", formatted).strip()
@@ -371,8 +398,14 @@ with col_chat:
                 st.markdown(prompt)
 
             with st.chat_message("assistant", avatar="🎩"):
+                # Caso 0: Prompt em branco sem anexo
+                if not prompt.strip() and not media_bytes:
+                    st.markdown(MSG_EMPTY_PROMPT)
+                    st.session_state.messages.append(
+                        {"role": "assistant", "content": MSG_EMPTY_PROMPT, "show_cot": False}
+                    )
                 # Caso 1: Ausência de API Key — Resposta pré-programada graciosa (Zero Crash)
-                if not st.session_state.engine.api_key:
+                elif not st.session_state.engine.api_key:
                     missing_msg = get_missing_key_message()
                     st.markdown(missing_msg)
                     st.session_state.messages.append(
@@ -388,7 +421,7 @@ with col_chat:
                     st.session_state.messages.append(
                         {"role": "assistant", "content": farewell_msg, "show_cot": False}
                     )
-                # Caso 3: Envio Multimodal ou Streaming Throttled (40ms) + Extração de Artifacts
+                # Caso 3: Envio Multimodal ou Streaming Throttled (40ms) + Blindagem Zero Crash
                 else:
                     cot_slot = st.empty()
                     with cot_slot.container():
@@ -405,32 +438,35 @@ with col_chat:
                     response_placeholder = st.empty()
                     full_text = ""
 
-                    if media_bytes and mime_type:
-                        multimodal_prompt = (
-                            f"{memory_prefix}"
-                            "Transcreva o enunciado ou equação deste material para o Quadro Negro usando "
-                            '<conrad_artifact type="math" title="Enunciado Transcrito"> (ou o tipo mais adequado) '
-                            "e comece guiando o estudante com uma pergunta indutiva sobre o primeiro passo.\n\n"
-                            f"Mensagem do estudante: {prompt}"
-                        )
-                        with st.spinner("Analisando foto/documento anexado e preparando o Quadro Negro..."):
-                            full_text = st.session_state.engine.send_message_multimodal(
-                                prompt=multimodal_prompt,
-                                media_bytes=media_bytes,
-                                mime_type=mime_type,
+                    try:
+                        if media_bytes and mime_type:
+                            multimodal_prompt = (
+                                f"{memory_prefix}"
+                                "Transcreva o enunciado ou equação deste material para o Quadro Negro usando "
+                                '<conrad_artifact type="math" title="Enunciado Transcrito"> (ou o tipo mais adequado) '
+                                "e comece guiando o estudante com uma pergunta indutiva sobre o primeiro passo.\n\n"
+                                f"Mensagem do estudante: {prompt}"
                             )
-                    else:
-                        contextual_prompt = f"{memory_prefix}{prompt}"
-                        last_render_time = time.time()
-                        RENDER_THROTTLE_SECONDS = 0.04  # Atualiza a tela a cada 40ms (~25 fps), suave e ultra-rápido
+                            with st.spinner("Analisando foto/documento anexado e preparando o Quadro Negro..."):
+                                full_text = st.session_state.engine.send_message_multimodal(
+                                    prompt=multimodal_prompt,
+                                    media_bytes=media_bytes,
+                                    mime_type=mime_type,
+                                )
+                        else:
+                            contextual_prompt = f"{memory_prefix}{prompt}"
+                            last_render_time = time.time()
+                            RENDER_THROTTLE_SECONDS = 0.04  # Atualiza a tela a cada 40ms (~25 fps), suave e ultra-rápido
 
-                        for chunk in st.session_state.engine.send_message_stream(contextual_prompt):
-                            full_text += chunk
-                            now = time.time()
-                            if now - last_render_time > RENDER_THROTTLE_SECONDS:
-                                # Apenas durante a geração: preview simples sem regex pesado a cada caractere
-                                response_placeholder.markdown(full_text + "▌")
-                                last_render_time = now
+                            for chunk in st.session_state.engine.send_message_stream(contextual_prompt):
+                                full_text += chunk
+                                now = time.time()
+                                if now - last_render_time > RENDER_THROTTLE_SECONDS:
+                                    # Apenas durante a geração: preview simples sem regex pesado a cada caractere
+                                    response_placeholder.markdown(full_text + "▌")
+                                    last_render_time = now
+                    except Exception as exc:
+                        full_text = ConradEngine._format_resilient_error(exc)
 
                     # Ao terminar o streaming: executa o parse final completo de uma única vez
                     text_without_thought, extracted_thought = CanvasParser.parse_thought(full_text)
@@ -480,12 +516,14 @@ with col_canvas:
     with canvas_card:
         if st.session_state.active_artifact:
             art = st.session_state.active_artifact
-            # Cabeçalho da Lousa com Badge
+            safe_art_title = html.escape(str(art.title))
+            safe_art_badge = html.escape(str(art.type).upper())
+            # Cabeçalho da Lousa com Badge (blindado contra injeção HTML/XSS)
             st.markdown(
                 f"""
-                <div style="border-bottom: 2px solid #C59B27; padding-bottom: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-size: 15px; font-weight: bold; color: #f5f5f5;">📌 {art.title}</span>
-                    <span style="background: #2A2A2A; border: 1px solid #444; font-size: 11px; padding: 2px 8px; border-radius: 4px; color: #C59B27;">{art.type.upper()}</span>
+                <div style="border-bottom: 2px solid #C59B27; padding-bottom: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                    <span style="font-size: 15px; font-weight: bold; color: #f5f5f5; min-inline-size: 0; overflow-wrap: anywhere;">📌 {safe_art_title}</span>
+                    <span style="background: #2A2A2A; border: 1px solid #444; font-size: 11px; padding: 2px 8px; border-radius: 4px; color: #C59B27; flex-shrink: 0;">{safe_art_badge}</span>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -497,8 +535,10 @@ with col_canvas:
             elif art.type == "code":
                 st.code(_clean_code_or_mermaid_fence(art.content))
             elif art.type == "mermaid":
-                clean_mermaid = _clean_code_or_mermaid_fence(art.content, "mermaid")
-                st.markdown(f"```mermaid\n{clean_mermaid}\n```")
+                repaired_mermaid, is_valid_mermaid, mermaid_warn = CanvasParser.validate_and_repair_mermaid(art.content)
+                st.markdown(f"```mermaid\n{repaired_mermaid}\n```")
+                if not is_valid_mermaid and mermaid_warn:
+                    st.caption(f"🛠️ *Estrutura do diagrama ajustada automaticamente: {mermaid_warn}*")
             else:
                 st.markdown(art.content)
         else:
