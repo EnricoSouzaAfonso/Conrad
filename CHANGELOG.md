@@ -1,9 +1,13 @@
-# 📝 Changelog
+﻿# 📝 Changelog
 
 Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
+
+
+### Corrigido
+- **Extinção da Barra Dupla de Rolagem e Unificação de Viewport 100dvh (`app.py`):** Remoção dos contêineres de scroll aninhados (`.chat-scroll-area`) e travamento estrutural de `html, body, [data-testid="stAppViewContainer"]` e `[data-testid="stMainBlockContainer"]` em `100dvh` (`overflow: hidden`), concentrando a rolagem exclusivamente nas trilhas independentes `div[data-testid="stColumn"]:first-child` e `div[data-testid="stColumn"]:last-child` com `scrollbar-gutter: stable`, `scrollbar-width: thin` e `scrollbar-color`.
 
 ## [3.0.1] - 27/10/2026
 
