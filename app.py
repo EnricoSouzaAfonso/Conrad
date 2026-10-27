@@ -238,6 +238,8 @@ if "current_mode" not in st.session_state:
     st.session_state.current_mode = "socratico"
 if "active_artifact" not in st.session_state:
     st.session_state.active_artifact = None
+if "canvas_collapsed" not in st.session_state:
+    st.session_state.canvas_collapsed = False
 if "cached_tokens" not in st.session_state:
     st.session_state.cached_tokens = 0
 
@@ -445,13 +447,63 @@ with st.sidebar:
 # ==============================================================================
 prompt = st.chat_input("Como posso ajudar seus estudos hoje? (digite 'fim' para encerrar)")
 
+# Injeção dinâmica de CSS dependendo do estado do Canvas
+if st.session_state.canvas_collapsed:
+    st.markdown(
+        """
+    <style>
+      [data-testid="stMainBlockContainer"] {
+          max-width: 820px !important;
+          margin-inline: auto !important;
+          overflow-y: auto !important;
+          scrollbar-gutter: stable !important;
+          scrollbar-width: thin;
+          scrollbar-color: #333333 transparent;
+          padding-bottom: 140px !important;
+      }
+      div[data-testid="stColumn"]:first-child {
+          height: auto !important;
+          max-height: none !important;
+          overflow: visible !important;
+          padding-bottom: 0 !important;
+      }
+      div[data-testid="stChatInput"],
+      .stChatInput {
+          width: 90% !important;
+          max-width: 760px !important;
+          left: calc(50% + 10rem) !important;
+          transform: translateX(-50%) !important;
+      }
+      #jump-to-bottom-btn {
+          left: calc(50% + 10rem) !important;
+      }
+    </style>
+    """,
+        unsafe_allow_html=True,
+    )
+
 # ==============================================================================
-# --- ÁREA PRINCIPAL: LAYOUT SPLIT-VIEW (CHAT À ESQUERDA | CANVAS À DIREITA) ---
+# --- ÁREA PRINCIPAL: DIVISÃO ADAPTATIVA (SPLIT-VIEW OU MODO EXPANDIDO) ---
 # ==============================================================================
-col_chat, col_canvas = st.columns([1.1, 0.9], gap="medium")
+if st.session_state.canvas_collapsed:
+    # MODO EXPANDIDO: Chat ocupa a tela com largura confortável e centralizada
+    col_chat = st.container()
+    col_canvas = None
+else:
+    # MODO SPLIT-VIEW: Chat à esquerda e Quadro Negro à direita
+    col_chat, col_canvas = st.columns([1.1, 0.9], gap="medium")
 
 with col_chat:
-    st.subheader("🎩 Diálogo com Conrad")
+    # Cabeçalho do Chat com botão de alternância do Quadro Negro
+    col_title, col_toggle = st.columns([0.75, 0.25])
+    with col_title:
+        st.subheader("🎩 Diálogo com Conrad")
+    with col_toggle:
+        btn_label = "📐 Abrir Lousa" if st.session_state.canvas_collapsed else "✖ Ocultar Lousa"
+        if st.button(btn_label, use_container_width=True, help="Oculte ou abra o Quadro Negro lateral"):
+            st.session_state.canvas_collapsed = not st.session_state.canvas_collapsed
+            st.rerun()
+
     st.caption(
         f"Modo: **{PEDAGOGICAL_MODES[st.session_state.current_mode]['nome']}** | Modelo: `{st.session_state.engine.model_name}`"
     )
@@ -582,8 +634,10 @@ with col_chat:
                 clean_chat_text, artifact = CanvasParser.parse_message(text_without_thought)
                 response_placeholder.markdown(clean_chat_text)
 
-                if artifact:
+                was_collapsed = st.session_state.canvas_collapsed
+                if artifact is not None:
                     st.session_state.active_artifact = artifact
+                    st.session_state.canvas_collapsed = False  # Auto-reveal estilo Claude Artifacts
 
                 st.session_state.messages.append(
                     {
@@ -595,6 +649,8 @@ with col_chat:
                     }
                 )
                 st.session_state.cached_tokens = st.session_state.engine.count_tokens()
+                if was_collapsed and artifact is not None:
+                    st.rerun()
 
     # Âncora de espaçamento final e Botão Flutuante "Rolar para o Fim" (↓)
     st.markdown(
@@ -602,9 +658,11 @@ with col_chat:
 <div id="chat-bottom-anchor" class="chat-bottom-spacer"></div>
 
 <button id="jump-to-bottom-btn" title="Rolar para as mensagens recentes" onclick="
+    const mainBlock = document.querySelector('[data-testid=\\'stMainBlockContainer\\']');
     const chatCol = document.querySelector('div[data-testid=\\'stColumn\\']:first-child');
-    if (chatCol) {
-        chatCol.scrollTo({ top: chatCol.scrollHeight, behavior: 'smooth' });
+    const target = (mainBlock && mainBlock.scrollHeight > mainBlock.clientHeight) ? mainBlock : chatCol;
+    if (target) {
+        target.scrollTo({ top: target.scrollHeight, behavior: 'smooth' });
     }
 ">
     ↓
@@ -659,69 +717,70 @@ with tokens_placeholder.container():
 
 session_artifacts = _collect_session_artifacts()
 
-with col_canvas:
-    st.subheader("📐 Quadro Negro do Conrad")
+if col_canvas is not None:
+    with col_canvas:
+        st.subheader("📐 Quadro Negro do Conrad")
 
-    # Contêiner nativo com borda integrada — conteúdo 100% encapsulado
-    canvas_card = st.container(border=True)
-    with canvas_card:
-        if st.session_state.active_artifact:
-            art = st.session_state.active_artifact
-            safe_art_title = html.escape(str(art.title))
-            safe_art_badge = html.escape(str(art.type).upper())
-            # Cabeçalho da Lousa com Badge (blindado contra injeção HTML/XSS)
-            st.markdown(
-                f"""
-                <div style="border-bottom: 2px solid #C59B27; padding-bottom: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
-                    <span style="font-size: 15px; font-weight: bold; color: #f5f5f5; min-inline-size: 0; overflow-wrap: anywhere;">📌 {safe_art_title}</span>
-                    <span style="background: #2A2A2A; border: 1px solid #444; font-size: 11px; padding: 2px 8px; border-radius: 4px; color: #C59B27; flex-shrink: 0;">{safe_art_badge}</span>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+        # Contêiner nativo com borda integrada — conteúdo 100% encapsulado
+        canvas_card = st.container(border=True)
+        with canvas_card:
+            if st.session_state.active_artifact:
+                art = st.session_state.active_artifact
+                safe_art_title = html.escape(str(art.title))
+                safe_art_badge = html.escape(str(art.type).upper())
+                # Cabeçalho da Lousa com Badge (blindado contra injeção HTML/XSS)
+                st.markdown(
+                    f"""
+                    <div style="border-bottom: 2px solid #C59B27; padding-bottom: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                        <span style="font-size: 15px; font-weight: bold; color: #f5f5f5; min-inline-size: 0; overflow-wrap: anywhere;">📌 {safe_art_title}</span>
+                        <span style="background: #2A2A2A; border: 1px solid #444; font-size: 11px; padding: 2px 8px; border-radius: 4px; color: #C59B27; flex-shrink: 0;">{safe_art_badge}</span>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
 
-            # Renderização interna estritamente DENTRO do container
-            if art.type == "math":
-                st.markdown(_format_math_for_canvas(art.content))
-            elif art.type == "code":
-                st.code(_clean_code_or_mermaid_fence(art.content))
-            elif art.type == "mermaid":
-                repaired_mermaid, is_valid_mermaid, mermaid_warn = CanvasParser.validate_and_repair_mermaid(art.content)
-                st.markdown(f"```mermaid\n{repaired_mermaid}\n```")
-                if not is_valid_mermaid and mermaid_warn:
-                    st.caption(f"🛠️ *Estrutura do diagrama ajustada automaticamente: {mermaid_warn}*")
+                # Renderização interna estritamente DENTRO do container
+                if art.type == "math":
+                    st.markdown(_format_math_for_canvas(art.content))
+                elif art.type == "code":
+                    st.code(_clean_code_or_mermaid_fence(art.content))
+                elif art.type == "mermaid":
+                    repaired_mermaid, is_valid_mermaid, mermaid_warn = CanvasParser.validate_and_repair_mermaid(art.content)
+                    st.markdown(f"```mermaid\n{repaired_mermaid}\n```")
+                    if not is_valid_mermaid and mermaid_warn:
+                        st.caption(f"🛠️ *Estrutura do diagrama ajustada automaticamente: {mermaid_warn}*")
+                else:
+                    st.markdown(art.content)
             else:
-                st.markdown(art.content)
-        else:
-            st.info(
-                "🎩 **O Quadro Negro está limpo.** Conforme você conversar com o Conrad sobre matemática, física ou programação, as fórmulas, diagramas e códigos aparecerão aqui dentro automaticamente!"
-            )
+                st.info(
+                    "🎩 **O Quadro Negro está limpo.** Conforme você conversar com o Conrad sobre matemática, física ou programação, as fórmulas, diagramas e códigos aparecerão aqui dentro automaticamente!"
+                )
 
-    # Botões de Exportação do Caderno Digital no Rodapé do Canvas
-    col_d1, col_d2 = st.columns(2)
-    with col_d1:
-        md_data = ConradNotebookCompiler.to_markdown(
-            "Matemática & Física",
-            st.session_state.messages,
-            session_artifacts,
-        )
-        st.download_button(
-            "📥 Baixar Resumo (.md)",
-            data=md_data,
-            file_name="caderno_conrad.md",
-            mime="text/markdown",
-            use_container_width=True,
-        )
-    with col_d2:
-        pdf_data = ConradNotebookCompiler.to_pdf_bytes(
-            "Matemática & Física",
-            st.session_state.messages,
-            session_artifacts,
-        )
-        st.download_button(
-            "📄 Baixar Caderno (.pdf)",
-            data=pdf_data,
-            file_name="caderno_conrad.pdf",
-            mime="application/pdf",
-            use_container_width=True,
-        )
+        # Botões de Exportação do Caderno Digital no Rodapé do Canvas
+        col_d1, col_d2 = st.columns(2)
+        with col_d1:
+            md_data = ConradNotebookCompiler.to_markdown(
+                "Matemática & Física",
+                st.session_state.messages,
+                session_artifacts,
+            )
+            st.download_button(
+                "📥 Baixar Resumo (.md)",
+                data=md_data,
+                file_name="caderno_conrad.md",
+                mime="text/markdown",
+                use_container_width=True,
+            )
+        with col_d2:
+            pdf_data = ConradNotebookCompiler.to_pdf_bytes(
+                "Matemática & Física",
+                st.session_state.messages,
+                session_artifacts,
+            )
+            st.download_button(
+                "📄 Baixar Caderno (.pdf)",
+                data=pdf_data,
+                file_name="caderno_conrad.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+            )

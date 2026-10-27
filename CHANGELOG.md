@@ -5,6 +5,11 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [3.2.0] - 27/10/2026
+
+### Adicionado
+- **Quadro Negro Retrátil (Collapsible Canvas Drawer) e Expansão Dinâmica do Chat (`app.py`):** Implementação do estado reativo `st.session_state.canvas_collapsed`, botão de alternância (`✖ Ocultar Lousa` / `📐 Abrir Lousa`) no cabeçalho do chat, expansão centralizada (`max-width: 820px`) com reposicionamento automático do Floating Input Dock quando a lousa está recolhida e abertura automática (*Auto-Reveal*) estilo Claude Artifacts ao receber novos artefatos matemáticos, de código ou diagramas.
+
 ## [3.1.1] - 27/10/2026
 
 ### Adicionado
