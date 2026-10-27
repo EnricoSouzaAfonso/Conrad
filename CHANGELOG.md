@@ -5,6 +5,21 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [3.0.1] - 27/10/2026
+
+### Adicionado
+- **Suíte Automatizada de Avaliação Heurística e Rigor Pedagógico (`tests/test_pedagogical_rigor.py`, `tests/qa_visual_inspection.py`):** Validação automatizada da conformidade epistemológica do Conrad v3.0 (Recusa Construtiva / Não-Passividade, Regra da Pergunta Única de Sweller, Proibição de Elogio à Inteligência Inata de Dweck, Anti-Sycophancy e Blindagem LaTeX), integrada como Passo 5/5 no protocolo obrigatório de QA.
+
+## [3.0.0] - 27/10/2026
+
+### Adicionado
+- **Engenharia do Prompt Mestre v3.0 (`src/conrad_persona.py`):** Reescritura integral de `SYSTEM_INSTRUCTION_CONRAD` (v3.0.0) estruturada em 8 eixos científicos: Regra de Ouro da Não-Passividade (Recusa Construtiva), Gestão de Carga Cognitiva e Regra da Pergunta Única (Sweller), Scaffolding Dinâmico, Fading e Retrieval Practice (Vygotsky/Roediger), Linguagem de Mentalidade de Crescimento (Carol Dweck), Anti-Sycophancy e Protocolo de 3 Passos, Blindagem MathJax, Protocolo do Quadro Negro e Regras Invioláveis.
+
+## [3.0.0-dev] - 27/10/2026
+
+### Adicionado
+- **Framework Pedagógico Baseado em Evidências (`src/conrad_pedagogy.py`):** Criação do módulo científico de governança pedagógica contendo os 6 níveis da Taxonomia de Bloom Revisada (`BLOOM_LEVELS`), heurísticas de Mentalidade de Crescimento (`GROWTH_MINDSET_RULES`), diretrizes de Carga Cognitiva de Sweller (`SWELLER_LOAD_RULES`), andaimes de Vygotsky (`VYGOTSKY_ZPD_RULES`) e modos especializados (`PEDAGOGICAL_MODES`).
+
 ## [2.6.2] - 23/10/2026
 
 ### Adicionado

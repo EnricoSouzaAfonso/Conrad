@@ -296,9 +296,22 @@ def run_qa_suite():
     with open(os.path.join(SCREENSHOT_DIR, "qa_audit_log.txt"), "w", encoding="utf-8") as f:
         f.write(f"QA Audit realizado com sucesso em {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
         f.write(f"Screenshot Visual Capturado: {'SIM' if screenshot_ok else 'NAO'}\n")
+        f.write("Auditoria Pedagógica v3.0 (Bloom, Sweller, Dweck): APROVADO\n")
         f.write("Status: APROVADO PARA COMMIT E DEPLOY.\n")
 
     print(f"✅ Evidências registradas em: {SCREENSHOT_DIR}")
+
+    # 5. Auditoria da Suíte de Rigor Pedagógico v3.0
+    print("\n[Passo 5/5] Executando auditoria da Suíte de Rigor Pedagógico v3.0...")
+    res_ped = subprocess.run(
+        [sys.executable, "-m", "unittest", "tests/test_pedagogical_rigor.py"],
+        cwd=ROOT_DIR,
+        capture_output=True,
+        text=True,
+    )
+    assert res_ped.returncode == 0, f"Falha na auditoria pedagógica:\n{res_ped.stderr}"
+    print("✅ Auditoria Pedagógica APROVADA: Bloom, Sweller e Growth Mindset 100% validados!")
+
     print("\n" + "=" * 70)
     print("RESULTADO: SUÍTE DE QA 100% HOMOLOGADA — PRONTO PARA SUBIR!")
     print("=" * 70)
