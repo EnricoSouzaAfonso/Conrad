@@ -242,11 +242,14 @@ class ConradEngine:
             ],
         )
 
-    def _init_chat(self, effective_model: Optional[str] = None):
+    def _init_chat(self, effective_model: Optional[str] = None, history=None):
         config = self._build_chat_config()
         target_model = effective_model or self._get_runtime_model(self.model_name)
         self._active_runtime_model = target_model
-        self.chat = self.client.chats.create(model=target_model, config=config)
+        if history:
+            self.chat = self.client.chats.create(model=target_model, config=config, history=history)
+        else:
+            self.chat = self.client.chats.create(model=target_model, config=config)
 
     def send_message(self, prompt: str) -> str:
         """Envia mensagem para a sessão ativa de chat e trata bloqueios, ausência de chave, 429 ou timeouts (Zero Crash)."""
@@ -258,7 +261,16 @@ class ConradEngine:
             return MSG_EMPTY_PROMPT
 
         try:
-            response = self.chat.send_message(clean_prompt)
+            try:
+                response = self.chat.send_message(clean_prompt)
+            except Exception as err:
+                if "503" in str(err).upper() or "UNAVAILABLE" in str(err).upper():
+                    prev_hist = self.chat.get_history() if hasattr(self.chat, "get_history") else None
+                    self._init_chat(effective_model="gemini-2.5-flash-lite", history=prev_hist)
+                    response = self.chat.send_message(clean_prompt)
+                else:
+                    raise err
+
             if response and response.text:
                 return response.text
 
@@ -291,7 +303,15 @@ class ConradEngine:
         contents.append(effective_text)
 
         try:
-            response = self.chat.send_message(contents)
+            try:
+                response = self.chat.send_message(contents)
+            except Exception as err:
+                if "503" in str(err).upper() or "UNAVAILABLE" in str(err).upper():
+                    prev_hist = self.chat.get_history() if hasattr(self.chat, "get_history") else None
+                    self._init_chat(effective_model="gemini-2.5-flash-lite", history=prev_hist)
+                    response = self.chat.send_message(contents)
+                else:
+                    raise err
             return response.text if (response and response.text) else "(Sem resposta textual da API)"
         except Exception as e:
             return self._format_resilient_error(e)
@@ -309,11 +329,23 @@ class ConradEngine:
 
         try:
             yielded_any = False
-            response_stream = self.chat.send_message_stream(clean_prompt)
-            for chunk in response_stream:
-                if getattr(chunk, "text", None):
-                    yielded_any = True
-                    yield chunk.text
+            try:
+                response_stream = self.chat.send_message_stream(clean_prompt)
+                for chunk in response_stream:
+                    if getattr(chunk, "text", None):
+                        yielded_any = True
+                        yield chunk.text
+            except Exception as err:
+                if not yielded_any and ("503" in str(err).upper() or "UNAVAILABLE" in str(err).upper()):
+                    prev_hist = self.chat.get_history() if hasattr(self.chat, "get_history") else None
+                    self._init_chat(effective_model="gemini-2.5-flash-lite", history=prev_hist)
+                    response_stream = self.chat.send_message_stream(clean_prompt)
+                    for chunk in response_stream:
+                        if getattr(chunk, "text", None):
+                            yielded_any = True
+                            yield chunk.text
+                else:
+                    raise err
             if not yielded_any:
                 yield "(O modelo concluiu a requisição sem gerar texto adicional.)"
         except Exception as e:
