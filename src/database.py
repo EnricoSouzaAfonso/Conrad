@@ -1,10 +1,13 @@
 """
 Módulo de Banco de Dados e Persistência do Projeto Conrad.
-Inclui sessões de chat e Memória Pedagógica Persistente (StudentCognitiveProfile).
+Inclui sessões de chat, Memória Pedagógica Multidisciplinar (StudentCognitiveProfile)
+e Gems Pedagógicas Customizáveis (PedagogicalGemDB).
 """
 import os
+import re
+import unicodedata
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 
@@ -15,6 +18,15 @@ engine = create_engine(
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
+# Valores padrão neutros e multidisciplinares para o perfil cognitivo escolar
+DEFAULT_STRENGTHS = "Curioso e aberto a novos conhecimentos"
+DEFAULT_DIFFICULTIES = "Diagnóstico conceitual em andamento"
+DEFAULT_LEARNING_STYLE = "Adaptativo (Analogias e exemplos práticos)"
+DEFAULT_PEDAGOGICAL_NOTES = (
+    "Estudante iniciando jornada multidisciplinar. "
+    "Adapte a linguagem ao ritmo e aos interesses do aluno."
+)
 
 
 class StudentUser(Base):
@@ -52,15 +64,26 @@ class StudentCognitiveProfile(Base):
     __tablename__ = "student_profiles"
     id = Column(Integer, primary_key=True, index=True)
     student_id = Column(Integer, ForeignKey("students.id"), unique=True, nullable=True)
-    strengths = Column(Text, default="")         # Ex: "Geometria plana, Lógica Booleana"
-    difficulties = Column(Text, default="")      # Ex: "Regra da Cadeia em Derivadas, Recursão"
-    learning_style = Column(String(50), default="Visual e Prático")  # Visual, Intuitivo, Formal
-    pedagogical_notes = Column(Text, default="") # Observações cumulativas do tutor
+    strengths = Column(Text, default=DEFAULT_STRENGTHS)
+    difficulties = Column(Text, default=DEFAULT_DIFFICULTIES)
+    learning_style = Column(String(100), default=DEFAULT_LEARNING_STYLE)
+    pedagogical_notes = Column(Text, default=DEFAULT_PEDAGOGICAL_NOTES)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class PedagogicalGemDB(Base):
+    __tablename__ = "pedagogical_gems"
+    id = Column(Integer, primary_key=True, index=True)
+    gem_id = Column(String(50), unique=True, index=True, nullable=False)
+    name = Column(String(100), nullable=False)
+    description = Column(String(255), nullable=False)
+    system_directive = Column(Text, nullable=False)
+    is_builtin = Column(Integer, default=0)  # 1 para as 4 oficiais (protegidas), 0 para customizadas
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 def get_or_create_profile(db, student_id: Optional[int] = None) -> StudentCognitiveProfile:
-    """Busca ou inicializa o perfil cognitivo do estudante."""
+    """Busca ou inicializa o perfil cognitivo neutro e multidisciplinar do estudante."""
     query = db.query(StudentCognitiveProfile)
     if student_id is not None:
         profile = query.filter(StudentCognitiveProfile.student_id == student_id).first()
@@ -70,14 +93,39 @@ def get_or_create_profile(db, student_id: Optional[int] = None) -> StudentCognit
     if not profile:
         profile = StudentCognitiveProfile(
             student_id=student_id,
-            strengths="Introdução à álgebra",
-            difficulties="Identificação de variáveis em equações",
-            learning_style="Analogias do cotidiano",
-            pedagogical_notes="Aluno motivado; responde bem quando estimulado com exemplos do dia a dia.",
+            strengths=DEFAULT_STRENGTHS,
+            difficulties=DEFAULT_DIFFICULTIES,
+            learning_style=DEFAULT_LEARNING_STYLE,
+            pedagogical_notes=DEFAULT_PEDAGOGICAL_NOTES,
         )
         db.add(profile)
         db.commit()
         db.refresh(profile)
+    else:
+        # Migração transparente: se o banco local ainda possuir o mock antigo de álgebra, atualiza suavemente
+        if "Introdução à álgebra" in (profile.strengths or ""):
+            profile.strengths = DEFAULT_STRENGTHS
+            if "Identificação de variáveis" in (profile.difficulties or ""):
+                profile.difficulties = DEFAULT_DIFFICULTIES
+            if "Analogias do cotidiano" in (profile.learning_style or ""):
+                profile.learning_style = DEFAULT_LEARNING_STYLE
+            if "Aluno motivado" in (profile.pedagogical_notes or ""):
+                profile.pedagogical_notes = DEFAULT_PEDAGOGICAL_NOTES
+            db.commit()
+            db.refresh(profile)
+    return profile
+
+
+def reset_profile_to_default(db, student_id: Optional[int] = None) -> StudentCognitiveProfile:
+    """Restaura o perfil cognitivo para os padrões neutros e multidisciplinares."""
+    profile = get_or_create_profile(db, student_id=student_id)
+    profile.strengths = DEFAULT_STRENGTHS
+    profile.difficulties = DEFAULT_DIFFICULTIES
+    profile.learning_style = DEFAULT_LEARNING_STYLE
+    profile.pedagogical_notes = DEFAULT_PEDAGOGICAL_NOTES
+    profile.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(profile)
     return profile
 
 
@@ -105,5 +153,92 @@ def update_profile(
     return profile
 
 
+def seed_default_gems(db):
+    """Garante a existência das 4 Gems nativas do Conrad."""
+    from src.conrad_pedagogy import PEDAGOGICAL_MODES
+
+    for key, data in PEDAGOGICAL_MODES.items():
+        existing = db.query(PedagogicalGemDB).filter(PedagogicalGemDB.gem_id == key).first()
+        if not existing:
+            gem = PedagogicalGemDB(
+                gem_id=key,
+                name=data["nome"],
+                description=data["descricao"],
+                system_directive=data["diretriz"],
+                is_builtin=1,
+            )
+            db.add(gem)
+    db.commit()
+
+
+def get_all_gems(db) -> List[PedagogicalGemDB]:
+    """Retorna todas as Gems ordenando oficiais primeiro, depois por nome."""
+    gems = (
+        db.query(PedagogicalGemDB)
+        .order_by(PedagogicalGemDB.is_builtin.desc(), PedagogicalGemDB.id.asc())
+        .all()
+    )
+    if not gems:
+        seed_default_gems(db)
+        gems = (
+            db.query(PedagogicalGemDB)
+            .order_by(PedagogicalGemDB.is_builtin.desc(), PedagogicalGemDB.id.asc())
+            .all()
+        )
+    return gems
+
+
+def get_gem_by_id(db, gem_id: str) -> Optional[PedagogicalGemDB]:
+    return db.query(PedagogicalGemDB).filter(PedagogicalGemDB.gem_id == gem_id).first()
+
+
+def create_custom_gem(db, name: str, description: str, system_directive: str) -> PedagogicalGemDB:
+    """Cria uma nova Gem pedagógica customizada no banco SQLite."""
+    normalized = unicodedata.normalize("NFKD", name or "").encode("ascii", "ignore").decode("ascii")
+    slug = re.sub(r"[^a-zA-Z0-9_]+", "_", normalized.lower()).strip("_")[:40] or "gem"
+    gem_id = f"custom_{slug}_{int(datetime.utcnow().timestamp() * 1000)}"
+    gem = PedagogicalGemDB(
+        gem_id=gem_id,
+        name=(name or "Nova Gem").strip(),
+        description=(description or "Gem personalizada").strip(),
+        system_directive=(system_directive or "").strip(),
+        is_builtin=0,
+    )
+    db.add(gem)
+    db.commit()
+    db.refresh(gem)
+    return gem
+
+
+def update_custom_gem(
+    db, gem_id: str, name: str, description: str, system_directive: str
+) -> Optional[PedagogicalGemDB]:
+    """Atualiza uma Gem customizada existente (protege built-ins contra alteração)."""
+    gem = get_gem_by_id(db, gem_id)
+    if not gem or gem.is_builtin == 1:
+        return None
+    gem.name = name.strip()
+    gem.description = description.strip()
+    gem.system_directive = system_directive.strip()
+    db.commit()
+    db.refresh(gem)
+    return gem
+
+
+def delete_custom_gem(db, gem_id: str) -> bool:
+    """Exclui uma Gem customizada (protege built-ins contra exclusão)."""
+    gem = get_gem_by_id(db, gem_id)
+    if not gem or gem.is_builtin == 1:
+        return False
+    db.delete(gem)
+    db.commit()
+    return True
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    try:
+        seed_default_gems(db)
+    finally:
+        db.close()

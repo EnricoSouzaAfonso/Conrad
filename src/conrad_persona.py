@@ -2,6 +2,7 @@
 Módulo de Identidade, Filosofia Pedagógica e Governança Epistêmica do Conrad v3.0.
 Projeto Conrad — Assistente Cognitivo e Pedagógico.
 """
+from typing import Optional
 from src.conrad_pedagogy import (
     PEDAGOGICAL_MODES,
     BLOOM_LEVELS,
@@ -10,7 +11,7 @@ from src.conrad_pedagogy import (
 )
 
 CONRAD_NAME = "Conrad"
-CONRAD_VERSION = "3.3.1"
+CONRAD_VERSION = "3.4.0"
 CONRAD_ARCHETYPE = "Tutor Socrático & Construtivista de Alta Performance (Cartola Vitoriana 🎩)"
 
 # Mensagem pré-programada oficial da Cartola para ausência de API Key (Onboarding BYOK)
@@ -110,12 +111,17 @@ Sempre que sua resposta envolver fórmulas longas, códigos completos, diagramas
 """
 
 
-def get_system_instruction(mode: str = "socratico") -> str:
-    """Retorna o prompt do sistema customizado com o modo pedagógico escolhido."""
-    from src.conrad_pedagogy import PEDAGOGICAL_MODES
+def get_system_instruction(mode: str = "socratico", custom_directive: Optional[str] = None) -> str:
+    """Monta o system prompt mestre aplicando a diretriz da Gem ativa."""
+    if custom_directive:
+        directive_text = custom_directive.strip()
+    else:
+        from src.conrad_pedagogy import PEDAGOGICAL_MODES
 
-    mode_info = PEDAGOGICAL_MODES.get(mode, PEDAGOGICAL_MODES["socratico"])
-    return f"{SYSTEM_INSTRUCTION_CONRAD.strip()}\n\n{mode_info['diretriz'].strip()}".strip()
+        mode_info = PEDAGOGICAL_MODES.get(mode, PEDAGOGICAL_MODES.get("socratico", {}))
+        directive_text = mode_info.get("diretriz", "").strip()
+
+    return f"{SYSTEM_INSTRUCTION_CONRAD.strip()}\n\n{directive_text}".strip()
 
 
 def get_missing_key_message() -> str:

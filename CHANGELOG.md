@@ -5,6 +5,20 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [3.4.0] - 27/10/2026
+
+### Adicionado
+- **Gems Pedagógicas Customizáveis com CRUD Completo (`src/database.py`, `src/conrad_persona.py`, `src/conrad_core.py`, `app.py`):** Evolução dos Modos Pedagógicos para Gems Dinâmicas persistidas no SQLite (`PedagogicalGemDB`), mantendo as 4 Gems oficiais protegidas (`is_builtin=1`) e permitindo que professores, escolas e estudantes criem, editem e excluam Gems customizadas (ex: *Redação ENEM*, *Biologia Molecular*) com injeção em tempo real no System Prompt.
+- **Upload Integrado com Botão `+` no Floating Input Dock e Cabeçalho Sticky da Lousa (`app.py`):** Substituição do bloco estático de upload no topo do chat por um botão circular `➕` acoplado à esquerda do Floating Input Dock (`st.popover`) com chip flutuante de pré-visualização, além de ancoragem `position: sticky` com *glassmorphism* no cabeçalho do chat (`.chat-sticky-header`) para manter o botão `✖ Ocultar Lousa` / `📐 Abrir Lousa` sempre acessível.
+- **Suíte Automatizada do Plano 8 (`tests/test_plano8.py`):** Cobertura automatizada validando a neutralidade multidisciplinar e migração do perfil cognitivo, CRUD de Gems pedagógicas, injeção dinâmica de diretrizes e blindagem de concorrência.
+
+### Modificado
+- **Neutralização Multidisciplinar do Perfil Cognitivo Inicial (`src/database.py`, `app.py`):** Substituição dos valores iniciais enviesados em álgebra por padrões neutros multidisciplinares (`DEFAULT_STRENGTHS`, `DEFAULT_DIFFICULTIES`), migração automática transparente de bancos legados e botão `🔄 Resetar` na interface.
+- **Reestruturação Ergonômica da Sidebar e Micro-Termômetro de Retenção (`app.py`, `src/conrad_analytics.py`):** Posicionamento imediato da Chave de API Gemini (BYOK) e seu tutorial no topo absoluto da barra lateral, seguido por Modelo de IA, Gems Pedagógicas, Perfil Cognitivo e um Micro-Termômetro de Retenção compacto (6px) com diagnóstico detalhado e Tema Ativo em *hover tooltip* (`popover="hint"` / WCAG 1.4.13).
+
+### Corrigido
+- **Blindagem de Concorrência nos Botões de Download (`app.py`):** Controle reativo via `st.session_state.is_generating` combinado com `disabled=True` e `pointer-events: none !important` nos botões de exportação do Caderno Digital durante o streaming da IA.
+
 ## [3.3.1] - 27/10/2026
 
 ### Adicionado

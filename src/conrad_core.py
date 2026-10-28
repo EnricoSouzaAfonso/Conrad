@@ -50,6 +50,7 @@ class ConradEngine:
         self.api_key = api_key if api_key is not None else self._resolve_api_key()
         self.model_name = model_name
         self.pedagogical_mode = pedagogical_mode if pedagogical_mode in PEDAGOGICAL_MODES else "socratico"
+        self.custom_gem_directive: Optional[str] = None
         self.system_instruction = system_instruction or get_system_instruction(self.pedagogical_mode)
         self.client = None
         self.chat = None
@@ -164,9 +165,18 @@ class ConradEngine:
         """Atualiza o modo pedagógico e reinicia a sessão de chat com a nova instrução."""
         if mode in PEDAGOGICAL_MODES:
             self.pedagogical_mode = mode
+            self.custom_gem_directive = None
             self.system_instruction = get_system_instruction(mode)
             if self.client and self.api_key:
                 self._init_chat()
+
+    def set_gem(self, gem_id: str, directive: str):
+        """Atualiza a Gem ativa e regenera a sessão do chat com o novo System Instruction."""
+        self.pedagogical_mode = gem_id
+        self.custom_gem_directive = directive
+        self.system_instruction = get_system_instruction(mode=gem_id, custom_directive=directive)
+        if self.client and self.api_key:
+            self._init_chat()
 
     def build_context_with_memory(self, memory_notes: str) -> str:
         """Gera injeção de contexto com o histórico pedagógico do aluno."""
@@ -336,7 +346,8 @@ class ConradEngine:
                         yielded_any = True
                         yield chunk.text
             except Exception as err:
-                if not yielded_any and ("503" in str(err).upper() or "UNAVAILABLE" in str(err).upper()):
+                err_up = str(err).upper()
+                if not yielded_any and any(k in err_up for k in ("503", "UNAVAILABLE", "429", "RESOURCE_EXHAUSTED")):
                     prev_hist = self.chat.get_history() if hasattr(self.chat, "get_history") else None
                     self._init_chat(effective_model="gemini-2.5-flash-lite", history=prev_hist)
                     response_stream = self.chat.send_message_stream(clean_prompt)

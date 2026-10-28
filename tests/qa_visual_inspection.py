@@ -111,18 +111,28 @@ def _capture_live_streamlit_screenshots(url: str, output_png: str) -> bool:
                     break
                 time.sleep(0.5)
 
-            # Clica em "Salvar e Validar Chave" na Sidebar para comprovar o banner verde na UI
+            # Clica em "Salvar Chave" na Sidebar para comprovar o banner verde na UI
             msg_id += 1
             _cdp_call(ws, msg_id, "Runtime.evaluate", {
                 "expression": """
                 (() => {
                     const buttons = Array.from(document.querySelectorAll('button'));
-                    const btn = buttons.find(b => b.innerText.includes('Salvar e Validar Chave'));
+                    const btn = buttons.find(b => b.innerText.includes('Salvar Chave') || b.innerText.includes('Salvar e Validar Chave'));
                     if (btn) btn.click();
                 })()
                 """,
             })
-            time.sleep(2.5)
+            for _ in range(20):
+                time.sleep(0.3)
+                msg_id += 1
+                res_k = _cdp_call(ws, msg_id, "Runtime.evaluate", {
+                    "expression": "document.body ? document.body.innerText : ''",
+                    "returnByValue": True,
+                })
+                txt_k = res_k.get("result", {}).get("value", "")
+                if ("Ativa!" in txt_k or "Chave válida" in txt_k) and "Gem Pedagógica Ativa" in txt_k:
+                    time.sleep(0.5)
+                    break
 
             # Captura o screenshot 1: API Key validada (banner verde) + Lousa inicial encapsulada sem scrollbar dupla
             msg_id += 1

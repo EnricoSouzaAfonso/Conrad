@@ -1,8 +1,9 @@
 """
-Interface Web Autônoma do Conrad — Versão 3.1.1
-Viewport de Alta Precisão (100dvh), Extinção da Barra Dupla de Rolagem (Scrollbar Unificada),
-Floating Input Dock Estilo Gemini/Claude/Grok, Botão Scroll-to-Bottom (↓),
-Prompt Mestre v3.0 (Bloom, Sweller, Vygotsky & Dweck) e Quadro Negro Encapsulado.
+Interface Web Autônoma do Conrad — Versão 3.4.0
+Gems Pedagógicas Customizáveis (CRUD SQLite), Perfil Cognitivo Multidisciplinar,
+Sidebar Ergonômica (BYOK no Topo + Micro-Termômetro com Tooltip em Hover),
+Cabeçalho Sticky Persistente da Lousa, Botão '+' de Upload no Floating Dock
+e Blindagem de Concorrência nos Botões de Download.
 """
 import os
 import re
@@ -14,10 +15,21 @@ from src.conrad_persona import get_missing_key_message, PEDAGOGICAL_MODES
 from src.conrad_canvas import CanvasParser
 from src.conrad_report import ConradNotebookCompiler
 from src.conrad_analytics import CognitiveRetentionTracker
-from src.database import init_db, SessionLocal, get_or_create_profile, update_profile
+from src.database import (
+    init_db,
+    SessionLocal,
+    get_or_create_profile,
+    update_profile,
+    reset_profile_to_default,
+    get_all_gems,
+    get_gem_by_id,
+    create_custom_gem,
+    update_custom_gem,
+    delete_custom_gem,
+)
 from src.assets.conrad_avatar import CONRAD_AVATAR_SVG
 
-# Inicializa o banco de dados local SQLite (Zero-Config)
+# Inicializa o banco de dados local SQLite e semeia as 4 Gems oficiais (Zero-Config)
 init_db()
 
 st.set_page_config(
@@ -27,7 +39,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# CSS: Reset de Viewport 100dvh, Scrollbar Unificada e Floating Input Dock (Plano 5)
+# CSS: Viewport 100dvh, Scrollbar Unificada, Cabeçalho Sticky, Botão '+' no Floating Dock e Blindagem de Downloads
 st.markdown(
     """
 <style>
@@ -100,7 +112,10 @@ st.markdown(
       padding-right: 4px !important;
   }
 
-  /* Reset para colunas aninhadas (cabeçalho do chat e botões de download do Canvas) */
+  /* Reset para colunas na Sidebar e colunas aninhadas (cabeçalho do chat e botões de download do Canvas) */
+  [data-testid="stSidebar"] div[data-testid="stColumn"],
+  [data-testid="stSidebar"] div[data-testid="stColumn"]:first-child,
+  [data-testid="stSidebar"] div[data-testid="stColumn"]:last-child,
   div[data-testid="stColumn"] div[data-testid="stColumn"],
   div[data-testid="stColumn"] div[data-testid="stColumn"]:first-child,
   div[data-testid="stColumn"] div[data-testid="stColumn"]:last-child {
@@ -155,18 +170,65 @@ st.markdown(
   }
 
   /* ==============================================================================
-     FLOATING INPUT DOCK ESTILO GEMINI / CLAUDE / GROK
+     CABEÇALHO STICKY DO CHAT (CONTROLE PERSISTENTE DA LOUSA)
+     ============================================================================== */
+  .chat-sticky-header,
+  div[data-testid="stColumn"]:first-child div[data-testid="stHorizontalBlock"]:first-of-type {
+      position: sticky !important;
+      top: 0 !important;
+      z-index: 900 !important;
+      background: rgba(18, 18, 18, 0.92) !important;
+      backdrop-filter: blur(12px) !important;
+      -webkit-backdrop-filter: blur(12px) !important;
+      padding-top: 4px !important;
+      padding-bottom: 8px !important;
+      margin-bottom: 12px !important;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  }
+
+  /* ==============================================================================
+     FLOATING INPUT DOCK + BOTÃO '+' DE UPLOAD INTEGRADO (ESTILO GEMINI / CLAUDE)
      ============================================================================== */
 
-  /* 1. Fixa a barra de input permanentemente no rodapé da tela */
+  /* 1. Ancoragem do botão '+' de upload diretamente à esquerda da barra de chat */
+  div[data-testid="stPopover"] {
+      position: fixed !important;
+      bottom: 28px !important;
+      left: calc(21rem + 2rem) !important;
+      z-index: 1005 !important;
+      width: 46px !important;
+  }
+  div[data-testid="stPopover"] button {
+      border-radius: 50% !important;
+      width: 46px !important;
+      height: 46px !important;
+      min-height: 46px !important;
+      padding: 0 !important;
+      background-color: #262626 !important;
+      border: 1px solid rgba(255, 255, 255, 0.18) !important;
+      color: #C59B27 !important;
+      font-size: 18px !important;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4) !important;
+      transition: transform 0.2s ease, border-color 0.2s ease !important;
+  }
+  div[data-testid="stPopover"] button:hover {
+      border-color: #C59B27 !important;
+      transform: scale(1.05) !important;
+  }
+  /* Oculta a setinha nativa do dropdown no botão circular '+' */
+  div[data-testid="stPopover"] button svg {
+      display: none !important;
+  }
+
+  /* 2. Fixa a barra de input permanentemente no rodapé da tela ao lado do botão '+' */
   div[data-testid="stChatInput"],
   .stChatInput {
       position: fixed !important;
       bottom: 24px !important;
       z-index: 1000 !important;
-      width: 44% !important;
-      max-width: 54% !important; /* Proporcional à coluna de chat */
-      left: calc(21rem + 2rem) !important; /* Alinhado após a Sidebar */
+      left: calc(21rem + 2rem + 56px) !important;
+      width: calc(44% - 56px) !important;
+      max-width: calc(54% - 56px) !important;
       background: rgba(22, 22, 22, 0.85) !important;
       backdrop-filter: blur(16px) !important;
       -webkit-backdrop-filter: blur(16px) !important;
@@ -177,28 +239,94 @@ st.markdown(
       transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
   }
 
-  /* 2. Destaque ao focar no campo de digitação */
+  /* 3. Destaque ao focar no campo de digitação */
   div[data-testid="stChatInput"]:focus-within,
   .stChatInput:focus-within {
       border-color: #C59B27 !important;
       box-shadow: 0 10px 35px rgba(197, 155, 39, 0.25) !important;
   }
 
-  /* 3. Ajuste responsivo caso a sidebar esteja colapsada ou em telas menores */
+  /* 4. Ajuste responsivo caso a sidebar esteja colapsada ou em telas menores */
   @media (max-width: 1024px) {
+      div[data-testid="stPopover"] {
+          left: 5% !important;
+      }
       div[data-testid="stChatInput"],
       .stChatInput {
-          width: 90% !important;
-          max-width: 90% !important;
-          left: 5% !important;
+          width: calc(90% - 56px) !important;
+          max-width: calc(90% - 56px) !important;
+          left: calc(5% + 56px) !important;
       }
   }
 
-  /* 4. Espaçamento de segurança no final do chat (Garante que a última mensagem não seja coberta) */
+  /* 5. Espaçamento de segurança no final do chat (Garante que a última mensagem não seja coberta) */
   .chat-bottom-spacer {
       height: 120px !important;
       width: 100% !important;
       clear: both !important;
+  }
+
+  /* ==============================================================================
+     MICRO-COMPONENTE DE RETENÇÃO COM HOVER TOOLTIP / POPOVER HINT (WCAG 1.4.13)
+     ============================================================================== */
+  .retention-micro-wrapper {
+      position: relative;
+      margin-bottom: 10px;
+  }
+  .retention-trigger-btn {
+      all: unset;
+      box-sizing: border-box;
+      display: block;
+      width: 100%;
+      cursor: help;
+      padding: 6px 8px;
+      border-radius: 6px;
+      background: #1b1b1b;
+      border: 1px solid #303030;
+      --interest-delay-start: 0.15s;
+      interest-delay-start: var(--interest-delay-start);
+      --interest-delay-end: 0.1s;
+      interest-delay-end: var(--interest-delay-end);
+  }
+  .retention-trigger-btn:hover,
+  .retention-trigger-btn:focus-visible,
+  .retention-trigger-btn:is(:interest-source, .interest-source) {
+      border-color: #C59B27;
+  }
+  .retention-tooltip-card {
+      visibility: hidden;
+      opacity: 0;
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 0;
+      right: 0;
+      background: #1f1f1f;
+      border: 1px solid #C59B27;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 11px;
+      color: #e8e8e8;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.65);
+      z-index: 1200;
+      transition: opacity 0.18s ease, visibility 0.18s ease;
+      pointer-events: auto;
+  }
+  .retention-micro-wrapper:hover .retention-tooltip-card,
+  .retention-micro-wrapper:focus-within .retention-tooltip-card,
+  .retention-tooltip-card:is(:interest-target, .interest-target) {
+      visibility: visible;
+      opacity: 1;
+  }
+
+  /* ==============================================================================
+     BLINDAGEM DE CONCORRÊNCIA NOS BOTÕES DE DOWNLOAD DURANTE GERAÇÃO DA IA
+     ============================================================================== */
+  .generating-active button[kind="primary"],
+  .generating-active [data-testid="stDownloadButton"] button,
+  [data-testid="stDownloadButton"] button:disabled {
+      pointer-events: none !important;
+      opacity: 0.40 !important;
+      cursor: not-allowed !important;
   }
 
   /* Estilização elegante da moldura do Quadro Negro e proteção contra overflow de matrizes extensas */
@@ -217,16 +345,17 @@ st.markdown(
   }
 
   .token-badge {
-      background-color: #2b2b2b;
-      border: 1px solid #444;
+      background-color: #1f1f1f;
+      border: 1px solid #333;
       border-radius: 6px;
-      padding: 8px 12px;
-      font-size: 0.85rem;
+      padding: 6px 10px;
+      font-size: 0.78rem;
+      color: #bbb;
       margin-bottom: 10px;
   }
 
   @media print {
-      header, footer, [data-testid="stSidebar"], .stChatInput, #jump-to-bottom-btn { display: none !important; }
+      header, footer, [data-testid="stSidebar"], .stChatInput, #jump-to-bottom-btn, div[data-testid="stPopover"] { display: none !important; }
       .stApp { background: white !important; color: black !important; }
   }
 </style>
@@ -234,7 +363,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Injeção de MathJax v3 e Mermaid.js CDN
+# Injeção de MathJax v3, Mermaid.js CDN e detecção de recurso para Interest Invokers
 st.markdown(
     """
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
@@ -243,12 +372,15 @@ st.markdown(
   if (window.mermaid) {
     mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'strict' });
   }
+  if (typeof HTMLButtonElement !== 'undefined' && !HTMLButtonElement.prototype.hasOwnProperty('interestForElement')) {
+    document.documentElement.dataset.interestPolyfillFallback = 'css-hover';
+  }
 </script>
 """,
     unsafe_allow_html=True,
 )
 
-# Inicialização de Estados (Lazy — Zero Crash sem API Key)
+# Inicialização de Estados Reativos (Lazy — Zero Crash sem API Key)
 if "engine" not in st.session_state:
     st.session_state.engine = ConradEngine()
 if "messages" not in st.session_state:
@@ -263,10 +395,16 @@ if "canvas_collapsed" not in st.session_state:
     st.session_state.canvas_collapsed = False
 if "cached_tokens" not in st.session_state:
     st.session_state.cached_tokens = 0
+if "pending_upload" not in st.session_state:
+    st.session_state.pending_upload = None
+if "uploader_key_counter" not in st.session_state:
+    st.session_state.uploader_key_counter = 0
+if "is_generating" not in st.session_state:
+    st.session_state.is_generating = False
 
 
 def _load_cognitive_profile():
-    """Carrega o perfil cognitivo persistente do aluno a partir do banco SQLite."""
+    """Carrega o perfil cognitivo multidisciplinar do aluno a partir do banco SQLite."""
     db = SessionLocal()
     try:
         profile = get_or_create_profile(db)
@@ -295,7 +433,29 @@ def _save_cognitive_profile(strengths: str, difficulties: str, learning_style: s
         db.close()
 
 
+def _load_all_gems_map():
+    """Carrega todas as Gems pedagógicas (oficiais + customizadas) do banco SQLite."""
+    db = SessionLocal()
+    try:
+        gems = get_all_gems(db)
+        return {
+            g.gem_id: {
+                "gem_id": g.gem_id,
+                "name": g.name,
+                "description": g.description,
+                "system_directive": g.system_directive,
+                "is_builtin": g.is_builtin,
+            }
+            for g in gems
+        }
+    finally:
+        db.close()
+
+
 cognitive_profile = _load_cognitive_profile()
+gem_options = _load_all_gems_map()
+if st.session_state.current_mode not in gem_options:
+    st.session_state.current_mode = "socratico"
 
 
 def _collect_session_artifacts():
@@ -350,34 +510,76 @@ def _format_math_for_canvas(content: str) -> str:
 
 
 # ==============================================================================
-# --- SIDEBAR: MODOS, PERFIL COGNITIVO, BYOK & TERMÔMETRO DE RETENÇÃO ---
+# --- SIDEBAR REESTRUTURADA (ORDEM ERGONÔMICA: BYOK NO TOPO -> MODELO -> GEMS) ---
 # ==============================================================================
 with st.sidebar:
+    # 0. Cabeçalho Oficial
     st.markdown(
         f"<div style='display:flex;align-items:center;gap:8px;'>{CONRAD_AVATAR_SVG} <h3 style='margin:0;'>Configurações</h3></div>",
         unsafe_allow_html=True,
     )
-    st.caption("Personalize o modo didático, motor cognitivo e sua chave de acesso.")
+    st.caption("Personalize sua chave de acesso, motor cognitivo e Gems de tutoria.")
 
-    # 1. Seletor de Modo Pedagógico Especializado
-    modo_selecionado = st.selectbox(
-        "🎯 Modo Pedagógico",
-        options=list(PEDAGOGICAL_MODES.keys()),
-        index=list(PEDAGOGICAL_MODES.keys()).index(st.session_state.current_mode),
-        format_func=lambda k: PEDAGOGICAL_MODES[k]["nome"],
-        help="Altere o estilo de tutoria do Conrad conforme seu objetivo de estudo.",
+    # =========================================================================
+    # 1. CHAVE DE API GEMINI (BYOK) — TOPO ABSOLUTO
+    # =========================================================================
+    st.markdown("#### 🔑 Chave de API Gemini (BYOK)")
+    api_key_input = st.text_input(
+        "Insira sua chave do Google AI Studio:",
+        value=st.session_state.engine.api_key or "",
+        type="password",
+        placeholder="AIzaSy...",
+        label_visibility="collapsed",
     )
-    if st.session_state.get("current_mode") != modo_selecionado:
-        st.session_state.current_mode = modo_selecionado
-        st.session_state.engine.set_pedagogical_mode(modo_selecionado)
-        st.toast(f"Modo alterado para {PEDAGOGICAL_MODES[modo_selecionado]['nome']}!", icon="🎩")
-    st.caption(f"ℹ️ {PEDAGOGICAL_MODES[modo_selecionado]['descricao']}")
+    col_k1, col_k2 = st.columns([0.65, 0.35])
+    with col_k1:
+        if st.button("Salvar Chave", use_container_width=True, type="primary"):
+            clean_key = (api_key_input or "").strip()
+            st.session_state.engine.set_api_key(clean_key)
+            with st.spinner("Validando..."):
+                if st.session_state.engine.validate_api_key():
+                    try:
+                        with open(".env", "w", encoding="utf-8") as env_file:
+                            env_file.write(f"GEMINI_API_KEY={clean_key}\nGOOGLE_API_KEY={clean_key}\n")
+                    except Exception:
+                        pass
+                    st.success("✅ Ativa!")
+                else:
+                    st.error("❌ Inválida.")
+    with col_k2:
+        if st.session_state.engine.api_key:
+            st.markdown(
+                "<div style='color:#4caf50;font-size:12px;margin-top:8px;'>● Conectado</div>",
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                "<div style='color:#ff9800;font-size:12px;margin-top:8px;'>○ Aguardando</div>",
+                unsafe_allow_html=True,
+            )
 
-    # 2. Seletor de Modelos Definitivos
+    with st.expander("📘 Como Obter sua Chave Gratuita", expanded=not bool(st.session_state.engine.api_key)):
+        st.markdown(
+            """
+            1. Acesse o [Google AI Studio](https://aistudio.google.com/app/apikey) e faça login.
+            2. Clique no botão azul **"Create API Key"**.
+            3. Cole a chave (`AIza...`) acima e clique em **"Salvar e Validar Chave"**.
+
+            💡 *100% gratuita para estudantes e professores!*
+            """
+        )
+
+    st.divider()
+
+    # =========================================================================
+    # 2. SELETOR DE MODELO DE IA
+    # =========================================================================
+    st.markdown("#### 🤖 Modelo de IA")
     selected_label = st.selectbox(
-        "🤖 Modelo de IA (Estáveis)",
+        "Modelo de IA",
         options=list(DEFINITIVE_MODELS.keys()),
         index=list(DEFINITIVE_MODELS.keys()).index(st.session_state.selected_model_label),
+        label_visibility="collapsed",
     )
     selected_model_id = DEFINITIVE_MODELS[selected_label]
     if selected_model_id != st.session_state.engine.model_name:
@@ -385,8 +587,103 @@ with st.sidebar:
         st.session_state.engine.set_model(selected_model_id)
         st.toast(f"Modelo alterado para {selected_model_id}!", icon="🎩")
 
-    # 3. Memória Pedagógica Persistente (Perfil Cognitivo)
-    with st.expander("🧠 Seu Perfil de Aprendizado (O que o Conrad já aprendeu sobre você)", expanded=False):
+    st.divider()
+
+    # =========================================================================
+    # 3. MODO PEDAGÓGICO / GEMS DINÂMICAS (CRUD COMPLETO)
+    # =========================================================================
+    st.markdown("#### 💎 Gem Pedagógica Ativa")
+    gem_keys = list(gem_options.keys())
+    selected_gem_id = st.selectbox(
+        "Gem Pedagógica Ativa",
+        options=gem_keys,
+        index=gem_keys.index(st.session_state.current_mode),
+        format_func=lambda k: gem_options[k]["name"],
+        help="Selecione uma Gem oficial ou crie sua própria Gem personalizada para qualquer disciplina.",
+        label_visibility="collapsed",
+    )
+    active_gem_data = gem_options[selected_gem_id]
+    if st.session_state.get("current_mode") != selected_gem_id:
+        st.session_state.current_mode = selected_gem_id
+        st.session_state.engine.set_gem(selected_gem_id, active_gem_data["system_directive"])
+        st.toast(f"Gem ativada: {active_gem_data['name']}!", icon="💎")
+    st.caption(f"ℹ️ {active_gem_data['description']}")
+
+    with st.expander("💎 Gerenciar Gems Pedagógicas (Criar / Editar)", expanded=False):
+        tab_create, tab_manage = st.tabs(["✨ Criar Nova", "🗂️ Minhas Gems"])
+        with tab_create:
+            new_gem_name = st.text_input("Nome da Gem:", placeholder="Ex: Redação ENEM ✍️", key="new_gem_name")
+            new_gem_desc = st.text_input(
+                "Descrição curta:",
+                placeholder="Ex: Guia estruturado nas 5 competências do ENEM",
+                key="new_gem_desc",
+            )
+            new_gem_dir = st.text_area(
+                "Diretrizes Pedagógicas da IA:",
+                placeholder="Ex: [MODO ATIVO: REDAÇÃO ENEM] Avalie tese, repertório sociocultural e proposta de intervenção...",
+                height=90,
+                key="new_gem_dir",
+            )
+            if st.button("✨ Criar Gem Pedagógica", use_container_width=True):
+                if new_gem_name.strip() and new_gem_dir.strip():
+                    db = SessionLocal()
+                    try:
+                        created = create_custom_gem(
+                            db,
+                            name=new_gem_name,
+                            description=new_gem_desc or "Gem pedagógica customizada",
+                            system_directive=new_gem_dir,
+                        )
+                        st.session_state.current_mode = created.gem_id
+                        st.session_state.engine.set_gem(created.gem_id, created.system_directive)
+                    finally:
+                        db.close()
+                    st.success(f"Gem '{new_gem_name.strip()}' criada e ativada!")
+                    st.rerun()
+                else:
+                    st.warning("Preencha o nome e as diretrizes da Gem.")
+
+        with tab_manage:
+            custom_gems = [g for g in gem_options.values() if g["is_builtin"] == 0]
+            if not custom_gems:
+                st.caption("Você ainda não criou Gems customizadas. As 4 Gems oficiais são protegidas (🔒).")
+            for cg in custom_gems:
+                cg_id = cg["gem_id"]
+                st.markdown(f"**💎 {html.escape(cg['name'])}**")
+                edit_name = st.text_input("Nome:", value=cg["name"], key=f"edit_name_{cg_id}")
+                edit_desc = st.text_input("Descrição:", value=cg["description"], key=f"edit_desc_{cg_id}")
+                edit_dir = st.text_area("Diretrizes:", value=cg["system_directive"], height=70, key=f"edit_dir_{cg_id}")
+                c_up, c_del = st.columns(2)
+                with c_up:
+                    if st.button("💾 Salvar", key=f"btn_save_{cg_id}", use_container_width=True):
+                        db = SessionLocal()
+                        try:
+                            update_custom_gem(db, cg_id, edit_name, edit_desc, edit_dir)
+                            if st.session_state.current_mode == cg_id:
+                                st.session_state.engine.set_gem(cg_id, edit_dir)
+                        finally:
+                            db.close()
+                        st.success("Gem atualizada!")
+                        st.rerun()
+                with c_del:
+                    if st.button("🗑️ Excluir", key=f"btn_del_{cg_id}", use_container_width=True):
+                        db = SessionLocal()
+                        try:
+                            delete_custom_gem(db, cg_id)
+                        finally:
+                            db.close()
+                        if st.session_state.current_mode == cg_id:
+                            st.session_state.current_mode = "socratico"
+                            st.session_state.engine.set_pedagogical_mode("socratico")
+                        st.info("Gem excluída.")
+                        st.rerun()
+
+    st.divider()
+
+    # =========================================================================
+    # 4. MEMÓRIA PEDAGÓGICA (PERFIL COGNITIVO NEUTRO MULTIDISCIPLINAR)
+    # =========================================================================
+    with st.expander("🧠 Perfil de Aprendizado (Memória do Aluno)", expanded=False):
         st.markdown(
             f"**✅ Pontos Fortes:** {cognitive_profile['strengths']}\n\n"
             f"**🎯 Em Evolução:** {cognitive_profile['difficulties']}\n\n"
@@ -396,76 +693,81 @@ with st.sidebar:
         new_strengths = st.text_input("Atualizar Pontos Fortes:", value=cognitive_profile["strengths"])
         new_difficulties = st.text_input("Atualizar Temas em Evolução:", value=cognitive_profile["difficulties"])
         new_style = st.text_input("Estilo de Aprendizado:", value=cognitive_profile["learning_style"])
-        if st.button("💾 Atualizar Perfil Cognitivo", use_container_width=True):
-            _save_cognitive_profile(
-                strengths=new_strengths,
-                difficulties=new_difficulties,
-                learning_style=new_style,
-                pedagogical_notes=cognitive_profile["pedagogical_notes"],
-            )
-            st.success("Perfil cognitivo salvo no banco de dados!")
-            st.rerun()
 
-    st.divider()
-
-    # 4. Gerenciamento da API Key (BYOK)
-    st.subheader("🔑 Chave da API Gemini (BYOK)")
-    api_key_input = st.text_input(
-        "Insira sua chave do Google AI Studio:",
-        value=st.session_state.engine.api_key or "",
-        type="password",
-        placeholder="AIzaSy...",
-    )
-
-    if st.button("Salvar e Validar Chave", use_container_width=True, type="primary"):
-        clean_key = (api_key_input or "").strip()
-        st.session_state.engine.set_api_key(clean_key)
-        with st.spinner("Validando chave junto à API do Google Gemini..."):
-            if st.session_state.engine.validate_api_key():
+        col_save_prof, col_reset_prof = st.columns([0.65, 0.35])
+        with col_save_prof:
+            if st.button("💾 Atualizar Perfil", use_container_width=True):
+                _save_cognitive_profile(
+                    strengths=new_strengths,
+                    difficulties=new_difficulties,
+                    learning_style=new_style,
+                    pedagogical_notes=cognitive_profile["pedagogical_notes"],
+                )
+                st.success("Perfil atualizado!")
+                st.rerun()
+        with col_reset_prof:
+            if st.button("🔄 Resetar", use_container_width=True, help="Restaurar perfil inicial neutro"):
+                db = SessionLocal()
                 try:
-                    with open(".env", "w", encoding="utf-8") as env_file:
-                        env_file.write(f"GEMINI_API_KEY={clean_key}\nGOOGLE_API_KEY={clean_key}\n")
-                except Exception:
-                    pass
-                st.success("✅ Chave válida e ativa!")
-            else:
-                st.error("❌ Chave inválida ou não autorizada.")
-
-    if st.session_state.engine.api_key:
-        st.caption("🟢 Status: Chave configurada na sessão.")
-    else:
-        st.caption("🟠 Status: Aguardando configuração de chave.")
-
-    # 5. Tutorial Visual Expansível
-    with st.expander("📘 Como Obter sua Chave Gratuita", expanded=not bool(st.session_state.engine.api_key)):
-        st.markdown(
-            """
-            1. **Acesse o portal oficial:** Clique em [Google AI Studio](https://aistudio.google.com/app/apikey) e faça login com sua conta Google.
-            2. **Gere a chave:** Clique no botão azul **"Create API Key"**.
-            3. **Ative no Conrad:** Copie o código gerado (`AIza...`), cole no campo acima e clique em **"Salvar e Validar Chave"**.
-
-            💡 *Dica: O Google oferece uma cota **100% gratuita** e generosa para estudantes, professores e uso pessoal!*
-            """
-        )
+                    reset_profile_to_default(db)
+                finally:
+                    db.close()
+                st.info("Perfil restaurado para padrão multidisciplinar!")
+                st.rerun()
 
     st.divider()
 
-    # 6. Termômetro de Retenção Cognitiva
+    # =========================================================================
+    # 5. RETENÇÃO DISCRETA (HOVER TOOLTIP) & MÉTRICAS COMPACTAS
+    # =========================================================================
     stats_placeholder = st.empty()
     tokens_placeholder = st.empty()
 
+    # 6. Botão Nova Conversa
     if st.button("🔄 Nova Conversa", use_container_width=True):
         st.session_state.messages = []
         st.session_state.active_artifact = None
         st.session_state.cached_tokens = 0
+        st.session_state.pending_upload = None
         if st.session_state.engine.api_key:
             st.session_state.engine._init_chat()
         st.rerun()
 
 
 # ==============================================================================
-# --- FLOATING INPUT DOCK (FORA DO FLUXO DESCENDENTE PARA FIXAÇÃO IMÓVEL) ---
+# --- POPOVER '+' DE UPLOAD E FLOATING INPUT DOCK (FORA DO FLUXO DESCENDENTE) ---
 # ==============================================================================
+with st.popover("➕", help="Anexar foto de caderno, lista de exercícios ou PDF"):
+    st.markdown("**📎 Anexar Material de Estudo**")
+    uploaded = st.file_uploader(
+        "Selecione um arquivo:",
+        type=["png", "jpg", "jpeg", "pdf"],
+        key=f"dock_file_uploader_{st.session_state.uploader_key_counter}",
+        label_visibility="collapsed",
+    )
+    if uploaded is not None:
+        st.session_state.pending_upload = uploaded
+    if st.session_state.pending_upload is not None:
+        if st.button("🗑️ Remover anexo", use_container_width=True):
+            st.session_state.pending_upload = None
+            st.session_state.uploader_key_counter += 1
+            st.rerun()
+
+# Chip Flutuante de Pré-visualização se houver anexo carregado
+if st.session_state.pending_upload is not None:
+    chip_name = st.session_state.pending_upload.name
+    st.markdown(
+        f"""
+        <div id="pending-upload-chip" style="position: fixed; bottom: 82px; left: calc(21rem + 2rem + 56px); z-index: 1002;
+                    background: #252525; border: 1px solid #C59B27; border-radius: 16px; padding: 4px 12px;
+                    display: flex; align-items: center; gap: 8px; font-size: 12px; color: #f0f0f0; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+            <span>📎 {html.escape(chip_name)}</span>
+            <span style="color: #C59B27; font-weight: 600;">Pronto para envio</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
 prompt = st.chat_input("Como posso ajudar seus estudos hoje? (digite 'fim' para encerrar)")
 
 # Injeção dinâmica de CSS dependendo do estado do Canvas
@@ -488,10 +790,13 @@ if st.session_state.canvas_collapsed:
           overflow: visible !important;
           padding-bottom: 0 !important;
       }
+      div[data-testid="stPopover"] {
+          left: calc(50% + 10rem - 395px) !important;
+      }
       div[data-testid="stChatInput"],
       .stChatInput {
           width: 90% !important;
-          max-width: 760px !important;
+          max-width: 720px !important;
           left: calc(50% + 10rem) !important;
           transform: translateX(-50%) !important;
       }
@@ -515,25 +820,19 @@ else:
     col_chat, col_canvas = st.columns([1.1, 0.9], gap="medium")
 
 with col_chat:
-    # Cabeçalho do Chat com botão de alternância do Quadro Negro
+    # Cabeçalho Sticky Persistente do Chat com botão de alternância do Quadro Negro
+    st.markdown('<div class="chat-sticky-header"></div>', unsafe_allow_html=True)
     col_title, col_toggle = st.columns([0.68, 0.32])
     with col_title:
         st.subheader("🎩 Diálogo com Conrad")
     with col_toggle:
         btn_label = "📐 Abrir Lousa" if st.session_state.canvas_collapsed else "✖ Ocultar Lousa"
-        if st.button(btn_label, use_container_width=True, help="Oculte ou abra o Quadro Negro lateral"):
+        if st.button(btn_label, use_container_width=True, help="Alternar visualização da lousa técnica lateral"):
             st.session_state.canvas_collapsed = not st.session_state.canvas_collapsed
             st.rerun()
 
     st.caption(
-        f"Modo: **{PEDAGOGICAL_MODES[st.session_state.current_mode]['nome']}** | Modelo: `{st.session_state.engine.model_name}`"
-    )
-
-    # Widget Multimodal de Upload de Fotos de Caderno e PDFs de Listas
-    uploaded_file = st.file_uploader(
-        "📎 Anexar foto do caderno, lista ou PDF de estudos:",
-        type=["png", "jpg", "jpeg", "pdf"],
-        key="study_media_uploader",
+        f"Gem: **{active_gem_data['name']}** | Modelo: `{st.session_state.engine.model_name}`"
     )
 
     # Renderização das mensagens em trilha única (sem container de scroll aninhado)
@@ -549,129 +848,136 @@ with col_chat:
 
     # Processamento da nova mensagem submetida no Floating Input Dock
     if prompt:
-        media_bytes = None
-        mime_type = None
-        media_name = None
-        if uploaded_file is not None:
-            media_bytes = uploaded_file.getvalue()
-            mime_type = uploaded_file.type or (
-                "application/pdf" if uploaded_file.name.lower().endswith(".pdf") else "image/png"
+        st.session_state.is_generating = True
+        try:
+            media_bytes = None
+            mime_type = None
+            media_name = None
+            pending_file = st.session_state.pending_upload
+            if pending_file is not None:
+                media_bytes = pending_file.getvalue()
+                mime_type = pending_file.type or (
+                    "application/pdf" if pending_file.name.lower().endswith(".pdf") else "image/png"
+                )
+                media_name = pending_file.name
+                st.session_state.pending_upload = None
+                st.session_state.uploader_key_counter += 1
+
+            st.session_state.messages.append(
+                {
+                    "role": "user",
+                    "content": prompt,
+                    "media_bytes": media_bytes,
+                    "mime_type": mime_type,
+                    "media_name": media_name,
+                }
             )
-            media_name = uploaded_file.name
+            with st.chat_message("user"):
+                if media_bytes and mime_type and mime_type.startswith("image/"):
+                    st.image(media_bytes, width=220)
+                elif media_name:
+                    st.caption(f"📄 Arquivo anexado: `{media_name}`")
+                st.markdown(prompt)
 
-        st.session_state.messages.append(
-            {
-                "role": "user",
-                "content": prompt,
-                "media_bytes": media_bytes,
-                "mime_type": mime_type,
-                "media_name": media_name,
-            }
-        )
-        with st.chat_message("user"):
-            if media_bytes and mime_type and mime_type.startswith("image/"):
-                st.image(uploaded_file, width=220)
-            elif media_name:
-                st.caption(f"📄 Arquivo anexado: `{media_name}`")
-            st.markdown(prompt)
-
-        with st.chat_message("assistant", avatar="🎩"):
-            # Caso 0: Prompt em branco sem anexo
-            if not prompt.strip() and not media_bytes:
-                st.markdown(MSG_EMPTY_PROMPT)
-                st.session_state.messages.append(
-                    {"role": "assistant", "content": MSG_EMPTY_PROMPT, "show_cot": False}
-                )
-            # Caso 1: Ausência de API Key — Resposta pré-programada graciosa (Zero Crash)
-            elif not st.session_state.engine.api_key:
-                missing_msg = get_missing_key_message()
-                st.markdown(missing_msg)
-                st.session_state.messages.append(
-                    {"role": "assistant", "content": missing_msg, "show_cot": False}
-                )
-            # Caso 2: Comando estrito de encerramento
-            elif prompt.strip() == "fim":
-                farewell_msg = (
-                    "Foi um prazer enorme explorar o conhecimento com você! "
-                    "Lembre-se de revisar os conceitos que discutimos hoje para consolidar seu aprendizado. Até a próxima! 🎩"
-                )
-                st.markdown(farewell_msg)
-                st.session_state.messages.append(
-                    {"role": "assistant", "content": farewell_msg, "show_cot": False}
-                )
-            # Caso 3: Envio Multimodal ou Streaming Throttled (40ms) + Blindagem Zero Crash
-            else:
-                cot_slot = st.empty()
-                with cot_slot.container():
-                    _render_cot_details()
-
-                memory_summary = (
-                    f"Pontos fortes: {cognitive_profile['strengths']} | "
-                    f"Dificuldades em evolução: {cognitive_profile['difficulties']} | "
-                    f"Estilo de aprendizado: {cognitive_profile['learning_style']} | "
-                    f"Notas: {cognitive_profile['pedagogical_notes']}"
-                )
-                memory_prefix = st.session_state.engine.build_context_with_memory(memory_summary)
-
-                response_placeholder = st.empty()
-                full_text = ""
-
-                try:
-                    if media_bytes and mime_type:
-                        multimodal_prompt = (
-                            f"{memory_prefix}"
-                            "Transcreva o enunciado ou equação deste material para o Quadro Negro usando "
-                            '<conrad_artifact type="math" title="Enunciado Transcrito"> (ou o tipo mais adequado) '
-                            "e comece guiando o estudante com uma pergunta indutiva sobre o primeiro passo.\n\n"
-                            f"Mensagem do estudante: {prompt}"
-                        )
-                        with st.spinner("Analisando foto/documento anexado e preparando o Quadro Negro..."):
-                            full_text = st.session_state.engine.send_message_multimodal(
-                                prompt=multimodal_prompt,
-                                media_bytes=media_bytes,
-                                mime_type=mime_type,
-                            )
-                    else:
-                        contextual_prompt = f"{memory_prefix}{prompt}"
-                        last_render_time = time.time()
-                        RENDER_THROTTLE_SECONDS = 0.04  # Atualiza a tela a cada 40ms (~25 fps), suave e ultra-rápido
-
-                        for chunk in st.session_state.engine.send_message_stream(contextual_prompt):
-                            full_text += chunk
-                            now = time.time()
-                            if now - last_render_time > RENDER_THROTTLE_SECONDS:
-                                # Apenas durante a geração: preview simples sem regex pesado a cada caractere
-                                response_placeholder.markdown(full_text + "▌")
-                                last_render_time = now
-                except Exception as exc:
-                    full_text = ConradEngine._format_resilient_error(exc)
-
-                # Ao terminar o streaming: executa o parse final completo de uma única vez
-                text_without_thought, extracted_thought = CanvasParser.parse_thought(full_text)
-                if extracted_thought:
+            with st.chat_message("assistant", avatar="🎩"):
+                # Caso 0: Prompt em branco sem anexo
+                if not prompt.strip() and not media_bytes:
+                    st.markdown(MSG_EMPTY_PROMPT)
+                    st.session_state.messages.append(
+                        {"role": "assistant", "content": MSG_EMPTY_PROMPT, "show_cot": False}
+                    )
+                # Caso 1: Ausência de API Key — Resposta pré-programada graciosa (Zero Crash)
+                elif not st.session_state.engine.api_key:
+                    missing_msg = get_missing_key_message()
+                    st.markdown(missing_msg)
+                    st.session_state.messages.append(
+                        {"role": "assistant", "content": missing_msg, "show_cot": False}
+                    )
+                # Caso 2: Comando estrito de encerramento
+                elif prompt.strip() == "fim":
+                    farewell_msg = (
+                        "Foi um prazer enorme explorar o conhecimento com você! "
+                        "Lembre-se de revisar os conceitos que discutimos hoje para consolidar seu aprendizado. Até a próxima! 🎩"
+                    )
+                    st.markdown(farewell_msg)
+                    st.session_state.messages.append(
+                        {"role": "assistant", "content": farewell_msg, "show_cot": False}
+                    )
+                # Caso 3: Envio Multimodal ou Streaming Throttled (40ms) + Blindagem Zero Crash
+                else:
+                    cot_slot = st.empty()
                     with cot_slot.container():
-                        _render_cot_details(extracted_thought)
+                        _render_cot_details()
 
-                clean_chat_text, artifact = CanvasParser.parse_message(text_without_thought)
-                response_placeholder.markdown(clean_chat_text)
+                    memory_summary = (
+                        f"Pontos fortes: {cognitive_profile['strengths']} | "
+                        f"Dificuldades em evolução: {cognitive_profile['difficulties']} | "
+                        f"Estilo de aprendizado: {cognitive_profile['learning_style']} | "
+                        f"Notas: {cognitive_profile['pedagogical_notes']}"
+                    )
+                    memory_prefix = st.session_state.engine.build_context_with_memory(memory_summary)
 
-                was_collapsed = st.session_state.canvas_collapsed
-                if artifact is not None:
-                    st.session_state.active_artifact = artifact
-                    st.session_state.canvas_collapsed = False  # Auto-reveal estilo Claude Artifacts
+                    response_placeholder = st.empty()
+                    full_text = ""
 
-                st.session_state.messages.append(
-                    {
-                        "role": "assistant",
-                        "content": clean_chat_text,
-                        "show_cot": True,
-                        "thought": extracted_thought,
-                        "artifact": artifact,
-                    }
-                )
-                st.session_state.cached_tokens = st.session_state.engine.count_tokens()
-                if was_collapsed and artifact is not None:
-                    st.rerun()
+                    try:
+                        if media_bytes and mime_type:
+                            multimodal_prompt = (
+                                f"{memory_prefix}"
+                                "Transcreva o enunciado ou equação deste material para o Quadro Negro usando "
+                                '<conrad_artifact type="math" title="Enunciado Transcrito"> (ou o tipo mais adequado) '
+                                "e comece guiando o estudante com uma pergunta indutiva sobre o primeiro passo.\n\n"
+                                f"Mensagem do estudante: {prompt}"
+                            )
+                            with st.spinner("Analisando foto/documento anexado e preparando o Quadro Negro..."):
+                                full_text = st.session_state.engine.send_message_multimodal(
+                                    prompt=multimodal_prompt,
+                                    media_bytes=media_bytes,
+                                    mime_type=mime_type,
+                                )
+                        else:
+                            contextual_prompt = f"{memory_prefix}{prompt}"
+                            last_render_time = time.time()
+                            RENDER_THROTTLE_SECONDS = 0.04  # Atualiza a tela a cada 40ms (~25 fps), suave e ultra-rápido
+
+                            for chunk in st.session_state.engine.send_message_stream(contextual_prompt):
+                                full_text += chunk
+                                now = time.time()
+                                if now - last_render_time > RENDER_THROTTLE_SECONDS:
+                                    response_placeholder.markdown(full_text + "▌")
+                                    last_render_time = now
+                    except Exception as exc:
+                        full_text = ConradEngine._format_resilient_error(exc)
+
+                    # Ao terminar o streaming: executa o parse final completo de uma única vez
+                    text_without_thought, extracted_thought = CanvasParser.parse_thought(full_text)
+                    if extracted_thought:
+                        with cot_slot.container():
+                            _render_cot_details(extracted_thought)
+
+                    clean_chat_text, artifact = CanvasParser.parse_message(text_without_thought)
+                    response_placeholder.markdown(clean_chat_text)
+
+                    was_collapsed = st.session_state.canvas_collapsed
+                    if artifact is not None:
+                        st.session_state.active_artifact = artifact
+                        st.session_state.canvas_collapsed = False  # Auto-reveal estilo Claude Artifacts
+
+                    st.session_state.messages.append(
+                        {
+                            "role": "assistant",
+                            "content": clean_chat_text,
+                            "show_cot": True,
+                            "thought": extracted_thought,
+                            "artifact": artifact,
+                        }
+                    )
+                    st.session_state.cached_tokens = st.session_state.engine.count_tokens()
+                    if was_collapsed and artifact is not None:
+                        st.session_state.is_generating = False
+                        st.rerun()
+        finally:
+            st.session_state.is_generating = False
 
     # Âncora de espaçamento final e Botão Flutuante "Rolar para o Fim" (↓)
     st.markdown(
@@ -721,18 +1027,39 @@ with col_chat:
         unsafe_allow_html=True,
     )
 
-# Atualiza o Termômetro de Retenção e Contador de Tokens na Sidebar sem bloquear o carregamento inicial
+# Atualiza o Micro-Termômetro de Retenção (Hover Tooltip) e Contador de Tokens na Sidebar
 with stats_placeholder.container():
     stats = CognitiveRetentionTracker.evaluate_session(st.session_state.messages)
-    st.markdown("### 🌡️ Termômetro de Retenção")
-    st.progress(stats["score"] / 100)
-    st.caption(f"**Nível:** {stats['status']}\n\n*{stats['feedback']}*")
+    retention_score = int(stats.get("score", 0))
+    retention_status = html.escape(str(stats.get("status", "Iniciando")))
+    retention_feedback = html.escape(str(stats.get("feedback", "Explore novos temas com o tutor.")))
+    active_topic = html.escape(str(stats.get("active_topic", "Exploratório / Multidisciplinar")))
+
+    st.markdown(
+        f"""
+        <div class="retention-micro-wrapper" title="Tema Ativo: {active_topic}&#10;Retenção Estimada: {retention_score}%&#10;Nível: {retention_status}&#10;Diagnóstico: {retention_feedback}">
+          <button type="button" class="retention-trigger-btn" interestfor="retention-hint-popover">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; font-size:12px; color:#aaa;">
+              <span>🌡️ Retenção do Tema</span>
+              <span style="font-weight:bold; color:#C59B27;">{retention_score}%</span>
+            </div>
+            <div style="background:#262626; border-radius:4px; height:6px; width:100%; overflow:hidden;">
+              <div style="background: linear-gradient(90deg, #C59B27, #4caf50); height:100%; width:{max(5, retention_score)}%; transition: width 0.4s ease;"></div>
+            </div>
+          </button>
+          <div popover="hint" id="retention-hint-popover" class="retention-tooltip-card">
+            <div><b>📌 Tema Ativo:</b> {active_topic}</div>
+            <div><b>🌡️ Retenção:</b> {retention_score}% — {retention_status}</div>
+            <div style="color:#bbb; margin-top:4px;">{retention_feedback}</div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 with tokens_placeholder.container():
-    st.divider()
-    st.subheader("📊 Métricas & Utilitários")
     st.markdown(
-        f"<div class='token-badge'><b>Tokens na Sessão:</b> {st.session_state.cached_tokens:,} / 1.048.576</div>",
+        f"<div class='token-badge'><b>📊 Tokens na Sessão:</b> {st.session_state.cached_tokens:,} / 1.048.576</div>",
         unsafe_allow_html=True,
     )
 
@@ -777,11 +1104,12 @@ if col_canvas is not None:
                     "🎩 **O Quadro Negro está limpo.** Conforme você conversar com o Conrad sobre matemática, física ou programação, as fórmulas, diagramas e códigos aparecerão aqui dentro automaticamente!"
                 )
 
-        # Botões de Exportação do Caderno Digital no Rodapé do Canvas
+        # Botões de Exportação do Caderno Digital no Rodapé do Canvas (Blindados contra cliques concorrentes)
+        is_busy = st.session_state.get("is_generating", False)
         col_d1, col_d2 = st.columns(2)
         with col_d1:
             md_data = ConradNotebookCompiler.to_markdown(
-                "Matemática & Física",
+                "Caderno Multidisciplinar",
                 st.session_state.messages,
                 session_artifacts,
             )
@@ -791,10 +1119,11 @@ if col_canvas is not None:
                 file_name="caderno_conrad.md",
                 mime="text/markdown",
                 use_container_width=True,
+                disabled=is_busy,
             )
         with col_d2:
             pdf_data = ConradNotebookCompiler.to_pdf_bytes(
-                "Matemática & Física",
+                "Caderno Multidisciplinar",
                 st.session_state.messages,
                 session_artifacts,
             )
@@ -804,4 +1133,5 @@ if col_canvas is not None:
                 file_name="caderno_conrad.pdf",
                 mime="application/pdf",
                 use_container_width=True,
+                disabled=is_busy,
             )
