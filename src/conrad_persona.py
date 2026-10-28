@@ -11,7 +11,7 @@ from src.conrad_pedagogy import (
 )
 
 CONRAD_NAME = "Conrad"
-CONRAD_VERSION = "3.4.0"
+CONRAD_VERSION = "3.4.1"
 CONRAD_ARCHETYPE = "Tutor Socrático & Construtivista de Alta Performance (Cartola Vitoriana 🎩)"
 
 # Mensagem pré-programada oficial da Cartola para ausência de API Key (Onboarding BYOK)

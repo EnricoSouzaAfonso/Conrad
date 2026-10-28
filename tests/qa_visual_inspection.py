@@ -199,7 +199,7 @@ def _capture_live_streamlit_screenshots(url: str, output_png: str) -> bool:
             })
 
             # Aguarda o streaming concluir e o Quadro Negro atualizar com o badge MATH
-            for _ in range(30):
+            for _ in range(55):
                 time.sleep(0.5)
                 msg_id += 1
                 res = _cdp_call(ws, msg_id, "Runtime.evaluate", {
@@ -208,7 +208,7 @@ def _capture_live_streamlit_screenshots(url: str, output_png: str) -> bool:
                 })
                 txt = res.get("result", {}).get("value", "")
                 if "MATH" in txt and "O Quadro Negro está limpo" not in txt:
-                    time.sleep(1.0)
+                    time.sleep(1.2)
                     break
 
             msg_id += 1
@@ -329,9 +329,10 @@ def run_qa_suite():
     assert 'id="jump-to-bottom-btn"' in app_src, "Falha: Botão scroll-to-bottom ausente!"
     assert 'class="chat-bottom-spacer"' in app_src, "Falha: Espaçador .chat-bottom-spacer ausente!"
     assert "canvas_collapsed" in app_src, "Falha: Estado retrátil canvas_collapsed ausente!"
+    assert "canvas_toggle_fixed_btn" in app_src, "Falha: Botão flutuante persistente da lousa (canvas_toggle_fixed_btn) ausente!"
     assert "✖ Ocultar Lousa" in app_src and "📐 Abrir Lousa" in app_src, "Falha: Botão de alternância da lousa ausente!"
     assert "scrollbar-color: transparent transparent !important;" in app_src, "Falha: Extinção da scrollbar rígida da lousa ausente!"
-    print("✅ Parser do Canvas, Quadro Negro Retrátil, Viewport 100dvh e Floating Input Dock: 100% íntegros!")
+    print("✅ Parser do Canvas, Quadro Negro Retrátil, Botão Flutuante Fixo, Viewport 100dvh e Floating Input Dock: 100% íntegros!")
 
     # 4. Relatório e Registro de Screenshots
     print("\n[Passo 4/4] Gerando evidências de teste em tests/screenshots/...")

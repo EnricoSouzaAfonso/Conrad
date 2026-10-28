@@ -47,10 +47,10 @@ In its **v3.3** architecture, Conrad operates on four scientific pillars of educ
 
 ## ✨ Key Features
 
-- **🧠 `google-genai` Cognitive Engine (1M Tokens):** Configured by default with `gemini-3.8-flash` alongside an integrated sidebar selector for stable models (`gemini-2.5-pro`, `gemini-2.5-flash`, and `gemini-2.5-flash-lite`), featuring transparent failover against demand spikes and smooth ~25fps streaming (`40ms` throttle).
+- **🧠 `google-genai` Cognitive Engine (1M Tokens):** Configured by default with `gemini-3.8-flash` alongside an integrated sidebar selector for active models (`gemini-3.6-flash`, `gemini-3.5-flash`, `gemini-3.1-flash-lite`, and `gemini-3.1-pro-preview`), featuring transparent failover against demand spikes and smooth ~25fps streaming (`40ms` throttle).
 - **📐 Conrad's Blackboard (Collapsible Split-View Canvas):** A retractable side panel (`✖ Ocultar Lousa` / `📐 Abrir Lousa`) inspired by *Claude Artifacts*. Collapses to expand the centered chat and automatically opens (*Auto-Reveal*) whenever Conrad projects algebraic derivations in **LaTeX/MathJax v3**, conceptual diagrams in **Mermaid.js** (with syntax validation and auto-repair), or formatted code blocks.
 - **💎 Customizable Pedagogical Gems (Full SQLite CRUD):** In addition to the 4 protected built-in Gems (*Pure Socratic*, *Exam & Challenge*, *Software Architect*, and *Feynman Method*), students and teachers can create, edit, and delete their own specialized Gems for any subject (e.g., *Essay Writing*, *Molecular Biology*, *World History*) directly in the sidebar.
-- **💬 Floating Input Dock with `➕` Upload Button & Sticky Header (`100dvh`):** A pill-shaped floating prompt bar paired with a circular `➕` attachment popover (`st.popover`) and floating file preview chip, plus a persistent sticky chat header that keeps the Blackboard toggle accessible at all times.
+- **💬 Floating Input Dock with `➕` Upload Button & Persistent Floating Blackboard Button (`100dvh`):** A pill-shaped floating prompt bar paired with a circular `➕` attachment popover (`st.popover`) and floating file preview chip, plus a persistent fixed top-right button (`position: fixed`) that keeps the Blackboard toggle (`📐 Abrir Lousa` / `✖ Ocultar Lousa`) 100% accessible regardless of chat scroll position.
 - **🔍 Pedagogical Chain-of-Thought (`<conrad_thought>`):** An expandable accordion (*"🧠 Raciocínio Pedagógico do Conrad"*) that transparently reveals the student's diagnosed Bloom level and the Socratic strategy chosen for each response.
 - **📎 Multimodal Study Vision:** Direct upload of notebook photos, scratchpad sheets, or problem sets in `.png`, `.jpg`, and `.pdf` via the `➕` button in the Floating Dock for automatic problem transcription onto the Blackboard and step-by-step guidance.
 - **🧬 Persistent Multidisciplinary Cognitive Memory (SQLite):** Continuous, subject-neutral tracking of the student's strengths, evolving difficulties, and learning style in a local relational database (`src/database.py`), with one-click reset to school-wide multidisciplinary defaults.
@@ -152,7 +152,7 @@ You can also run Conrad directly in the cloud with zero local setup:
 ## 🛠️ Technologies Used
 
 - **Core Language:** [Python 3.11+](https://www.python.org/)
-- **Generative AI SDK:** [Google GenAI SDK (`google-genai`)](https://ai.google.dev/) — Models `gemini-3.8-flash` (default, 1M tokens), `gemini-2.5-pro`, `gemini-2.5-flash`, and `gemini-2.5-flash-lite`
+- **Generative AI SDK:** [Google GenAI SDK (`google-genai`)](https://ai.google.dev/) — Models `gemini-3.8-flash` (default, 1M tokens), `gemini-3.6-flash`, `gemini-3.5-flash`, `gemini-3.1-flash-lite`, and `gemini-3.1-pro-preview`
 - **Web Frontend:** [Streamlit](https://streamlit.io/) + Modern CSS3 (`100dvh` Viewport, Floating Input Dock, Glassmorphism)
 - **Scientific Rendering & Diagrams:** [MathJax v3](https://www.mathjax.org/) (LaTeX/TeX) and [Mermaid.js v10](https://mermaid.js.org/)
 - **Backend & Persistence:** [FastAPI](https://fastapi.tiangolo.com/), [SQLAlchemy](https://www.sqlalchemy.org/), and [SQLite](https://www.sqlite.org/)

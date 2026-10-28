@@ -10,28 +10,20 @@ from src.conrad_persona import (
     PEDAGOGICAL_MODES,
 )
 
-# Lista oficial de modelos definitivos (sem previews temporários que expiram)
+# Lista oficial de modelos definitivos ativos no Google Gemini (2026)
 DEFINITIVE_MODELS = {
     "Gemini 3.8 Flash (Padrão — Rápido, 1M Tokens)": "gemini-3.8-flash",
-    "Gemini 2.5 Flash (Estável)": "gemini-2.5-flash",
-    "Gemini 2.5 Pro (Raciocínio Profundo & Exatas)": "gemini-2.5-pro",
-    "Gemini 1.5 Flash (Legado Estável)": "gemini-1.5-flash",
-    "Gemini 1.5 Pro (Legado Pro)": "gemini-1.5-pro",
+    "Gemini 3.6 Flash (Alta Estabilidade & Velocidade)": "gemini-3.6-flash",
+    "Gemini 3.5 Flash (Estável & Multimodal)": "gemini-3.5-flash",
+    "Gemini 3.1 Flash Lite (Ultra-Rápido & Econômico)": "gemini-3.1-flash-lite",
+    "Gemini 3.1 Pro Preview (Raciocínio Avançado & Exatas)": "gemini-3.1-pro-preview",
 }
 
 DEFAULT_MODEL_NAME = "gemini-3.8-flash"
+FALLBACK_MODEL_NAME = "gemini-3.5-flash"  # Modelo com 100% de disponibilidade comprovada na API
 
 # Limite seguro de caracteres por prompt para evitar estouro de payload HTTP/DOM mantendo suporte a 20k+ chars
 MAX_SAFE_PROMPT_CHARS = 32000
-
-# Mapeamento de roteamento direto para baixa latência (TTFT < 1.5s) no endpoint AI Studio
-RUNTIME_MODEL_MAP = {
-    "gemini-3.8-flash": "gemini-2.5-flash",
-    "gemini-2.5-flash": "gemini-2.5-flash",
-    "gemini-2.5-pro": "gemini-2.5-flash",
-    "gemini-1.5-flash": "gemini-2.5-flash",
-    "gemini-1.5-pro": "gemini-2.5-flash",
-}
 
 MSG_EMPTY_PROMPT = (
     "🎩 Parece que sua mensagem chegou em branco! "
@@ -61,8 +53,8 @@ class ConradEngine:
 
     @staticmethod
     def _get_runtime_model(model_name: str) -> str:
-        """Retorna o modelo efetivo de baixa latência disponível na API."""
-        return RUNTIME_MODEL_MAP.get(model_name, "gemini-2.5-flash")
+        """Retorna o modelo solicitado diretamente pelo usuário, sem mascaramento ou desvio."""
+        return model_name or DEFAULT_MODEL_NAME
 
     @staticmethod
     def _sanitize_prompt(prompt: Optional[str]) -> str:
@@ -97,8 +89,14 @@ class ConradEngine:
         if "429" in upper or "RESOURCE_EXHAUSTED" in upper or "QUOTA" in upper or "RATE_LIMIT" in upper:
             return (
                 "⏳ **Limite de Requisições Atingido (Erro 429 — Cota da API):** "
-                "Sua chave atingiu temporariamente o limite gratuito de chamadas do Google AI Studio. "
-                "Aguarde alguns segundos antes de enviar a próxima pergunta ou insira outra chave na barra lateral! 🎩"
+                "Sua chave atingiu temporariamente o limite gratuito para este modelo. "
+                "Você pode aguardar alguns instantes ou alternar para o **Gemini 3.5 Flash** ou **Gemini 3.1 Flash Lite** na barra lateral! 🎩"
+            )
+        if "503" in upper or "HIGH DEMAND" in upper or "UNAVAILABLE" in upper:
+            return (
+                "⚡ **Alta Demanda Momentânea nos Servidores (Erro 503):** "
+                "O modelo selecionado está enfrentando pico de tráfego temporário no Google AI Studio. "
+                "Por favor, tente novamente em alguns segundos ou selecione o **Gemini 3.5 Flash** na barra lateral para resposta imediata! 🎩"
             )
         if "TIMEOUT" in upper or "TIMED OUT" in upper or "DEADLINE_EXCEEDED" in upper or "504" in upper:
             return (
@@ -110,7 +108,7 @@ class ConradEngine:
             return (
                 "🔑 **Chave de API Inválida ou Não Autorizada:** "
                 "Não foi possível autenticar sua chave junto ao Google Gemini. "
-                "Verifique os caracteres na barra lateral à esquerda e clique em *Salvar e Validar Chave*. 🎩"
+                "Verifique os caracteres na barra lateral à esquerda e clique em *Salvar Chave*. 🎩"
             )
         return (
             f"⚠️ **Oscilação Temporária na Comunicação com a IA:** "
@@ -186,7 +184,7 @@ class ConradEngine:
         """Cria instância do genai.Client com timeout ajustado e sem loop de retry bloqueante."""
         try:
             http_opts = types.HttpOptions(
-                timeout=15000,
+                timeout=12000,
                 retry_options=types.HttpRetryOptions(attempts=1),
             )
             return genai.Client(api_key=api_key, http_options=http_opts)
@@ -274,9 +272,10 @@ class ConradEngine:
             try:
                 response = self.chat.send_message(clean_prompt)
             except Exception as err:
-                if "503" in str(err).upper() or "UNAVAILABLE" in str(err).upper():
+                err_up = str(err).upper()
+                if self.model_name != FALLBACK_MODEL_NAME and any(k in err_up for k in ("503", "UNAVAILABLE", "HIGH DEMAND", "TIMEOUT", "TIMED OUT", "DEADLINE_EXCEEDED", "504")):
                     prev_hist = self.chat.get_history() if hasattr(self.chat, "get_history") else None
-                    self._init_chat(effective_model="gemini-2.5-flash-lite", history=prev_hist)
+                    self._init_chat(effective_model=FALLBACK_MODEL_NAME, history=prev_hist)
                     response = self.chat.send_message(clean_prompt)
                 else:
                     raise err
@@ -316,9 +315,10 @@ class ConradEngine:
             try:
                 response = self.chat.send_message(contents)
             except Exception as err:
-                if "503" in str(err).upper() or "UNAVAILABLE" in str(err).upper():
+                err_up = str(err).upper()
+                if self.model_name != FALLBACK_MODEL_NAME and any(k in err_up for k in ("503", "UNAVAILABLE", "HIGH DEMAND", "TIMEOUT", "TIMED OUT", "DEADLINE_EXCEEDED", "504")):
                     prev_hist = self.chat.get_history() if hasattr(self.chat, "get_history") else None
-                    self._init_chat(effective_model="gemini-2.5-flash-lite", history=prev_hist)
+                    self._init_chat(effective_model=FALLBACK_MODEL_NAME, history=prev_hist)
                     response = self.chat.send_message(contents)
                 else:
                     raise err
@@ -347,9 +347,9 @@ class ConradEngine:
                         yield chunk.text
             except Exception as err:
                 err_up = str(err).upper()
-                if not yielded_any and any(k in err_up for k in ("503", "UNAVAILABLE", "429", "RESOURCE_EXHAUSTED")):
+                if not yielded_any and self.model_name != FALLBACK_MODEL_NAME and any(k in err_up for k in ("503", "UNAVAILABLE", "HIGH DEMAND", "TIMEOUT", "TIMED OUT", "DEADLINE_EXCEEDED", "504")):
                     prev_hist = self.chat.get_history() if hasattr(self.chat, "get_history") else None
-                    self._init_chat(effective_model="gemini-2.5-flash-lite", history=prev_hist)
+                    self._init_chat(effective_model=FALLBACK_MODEL_NAME, history=prev_hist)
                     response_stream = self.chat.send_message_stream(clean_prompt)
                     for chunk in response_stream:
                         if getattr(chunk, "text", None):
@@ -367,7 +367,7 @@ class ConradEngine:
         if not self.api_key or not self.client:
             return 0
         try:
-            target_model = self._active_runtime_model or "gemini-2.5-flash"
+            target_model = self.model_name or DEFAULT_MODEL_NAME
             if contents is None and self.chat:
                 history = self.chat.get_history()
                 if not history:

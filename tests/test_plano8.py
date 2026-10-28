@@ -117,6 +117,7 @@ class TestPlano8Suite(unittest.TestCase):
 
     def tearDown(self):
         self.db.close()
+        self.engine.dispose()
 
     def test_perfil_multidisciplinar_e_reset(self):
         test_perfil_cognitivo_multidisciplinar(self.db)
@@ -141,8 +142,20 @@ class TestPlano8Suite(unittest.TestCase):
         self.assertIn("is_generating", app_src)
         self.assertIn("pointer-events: none !important;", app_src)
         self.assertIn("disabled=is_busy", app_src)
-        self.assertIn("chat-sticky-header", app_src)
+        self.assertIn("canvas_toggle_fixed_btn", app_src)
         self.assertIn('with st.popover("➕"', app_src)
+
+    def test_modelos_ativos_e_sem_mascaramento(self):
+        core_path = os.path.join(os.path.dirname(__file__), "..", "src", "conrad_core.py")
+        with open(core_path, "r", encoding="utf-8") as f:
+            core_src = f.read()
+        # Não pode conter modelo extinto
+        self.assertNotIn("gemini-2.5-flash-lite", core_src)
+        # Não pode conter mapa de mascaramento/desvio de modelo
+        self.assertNotIn("RUNTIME_MODEL_MAP", core_src)
+        # Deve conter os modelos ativos suportados
+        self.assertIn("gemini-3.8-flash", core_src)
+        self.assertIn("gemini-3.5-flash", core_src)
 
 
 if __name__ == "__main__":

@@ -47,10 +47,10 @@ Em sua arquitetura **v3.3**, o Conrad opera sobre quatro pilares científicos da
 
 ## ✨ Funcionalidades Principais
 
-- **🧠 Motor Cognitivo `google-genai` (1M Tokens):** Configurado por padrão com o `gemini-3.8-flash` e seletor integrado na interface para modelos estáveis (`gemini-2.5-pro`, `gemini-2.5-flash` e `gemini-2.5-flash-lite`), incluindo *failover* transparente contra picos de demanda e *streaming* fluido a ~25fps (`40ms` throttle).
+- **🧠 Motor Cognitivo `google-genai` (1M Tokens):** Configurado por padrão com o `gemini-3.8-flash` e seletor integrado na interface para os modelos ativos (`gemini-3.6-flash`, `gemini-3.5-flash`, `gemini-3.1-flash-lite` e `gemini-3.1-pro-preview`), incluindo *failover* transparente contra picos de demanda e *streaming* fluido a ~25fps (`40ms` throttle).
 - **📐 Quadro Negro do Conrad (Collapsible Split-View Canvas):** Lousa lateral retrátil (`✖ Ocultar Lousa` / `📐 Abrir Lousa`) inspirada no *Claude Artifacts*. Recolhe-se para expandir o chat centralizado e abre-se automaticamente (*Auto-Reveal*) sempre que o Conrad projeta deduções algébricas em **LaTeX/MathJax v3**, diagramas em **Mermaid.js** (com validação e auto-reparo sintático) ou blocos de código.
 - **💎 Gems Pedagógicas Customizáveis (CRUD Completo em SQLite):** Além das 4 Gems nativas protegidas (*Socrático Puro*, *Simulado & Desafio*, *Arquiteto de Software* e *Método Feynman*), estudantes e professores podem criar, editar e excluir suas próprias Gems especializadas para qualquer disciplina (ex: *Redação ENEM*, *Biologia*, *História*) diretamente na barra lateral.
-- **💬 Floating Input Dock com Botão `➕` de Upload & Cabeçalho Sticky (`100dvh`):** Barra de perguntas flutuante no rodapé acompanhada do botão circular `➕` (`st.popover`) para anexar fotos de cadernos e PDFs com chip de pré-visualização, além de cabeçalho *sticky* persistente que mantém o controle da lousa sempre acessível.
+- **💬 Floating Input Dock com Botão `➕` de Upload & Botão Flutuante Persistente da Lousa (`100dvh`):** Barra de perguntas flutuante no rodapé acompanhada do botão circular `➕` (`st.popover`) para anexar fotos de cadernos e PDFs com chip de pré-visualização, além do botão flutuante fixo no topo direito (`position: fixed`) que mantém o controle da lousa (`📐 Abrir Lousa` / `✖ Ocultar Lousa`) 100% acessível em qualquer nível de rolagem.
 - **🔍 Cadeia de Pensamento Pedagógica (`<conrad_thought>`):** Acordeão expansível (*"🧠 Raciocínio Pedagógico do Conrad"*) que revela de forma transparente o diagnóstico do nível de Bloom e a estratégia socrática adotada em cada resposta.
 - **📎 Visão Multimodal para Estudos:** Upload direto de fotos de cadernos, folhas de rascunho ou listas de exercícios em `.png`, `.jpg` e `.pdf` através do botão `➕` no Floating Dock para transcrição automática do enunciado no Quadro Negro e mediação passo a passo.
 - **🧬 Memória Cognitiva Multidisciplinar Persistente (SQLite):** Registro contínuo e neutro dos pontos fortes, dificuldades em evolução e estilo de aprendizagem do estudante em banco de dados relacional local (`src/database.py`), com restauração rápida para o padrão multidisciplinar escolar.
@@ -152,7 +152,7 @@ Você também pode executar o Conrad diretamente na nuvem sem instalar nada loca
 ## 🛠️ Tecnologias Utilizadas
 
 - **Linguagem Base:** [Python 3.11+](https://www.python.org/)
-- **SDK de IA Generativa:** [Google GenAI SDK (`google-genai`)](https://ai.google.dev/) — Modelos `gemini-3.8-flash` (padrão, 1M tokens), `gemini-2.5-pro`, `gemini-2.5-flash` e `gemini-2.5-flash-lite`
+- **SDK de IA Generativa:** [Google GenAI SDK (`google-genai`)](https://ai.google.dev/) — Modelos `gemini-3.8-flash` (padrão, 1M tokens), `gemini-3.6-flash`, `gemini-3.5-flash`, `gemini-3.1-flash-lite` e `gemini-3.1-pro-preview`
 - **Frontend Web:** [Streamlit](https://streamlit.io/) + CSS3 Moderno (`100dvh` Viewport, Floating Input Dock, Glassmorphism)
 - **Renderização Científica & Diagramas:** [MathJax v3](https://www.mathjax.org/) (LaTeX/TeX) e [Mermaid.js v10](https://mermaid.js.org/)
 - **Backend & Persistência:** [FastAPI](https://fastapi.tiangolo.com/), [SQLAlchemy](https://www.sqlalchemy.org/) e [SQLite](https://www.sqlite.org/)

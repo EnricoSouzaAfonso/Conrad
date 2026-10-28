@@ -5,6 +5,20 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [3.4.1] - 28/10/2026
+
+### Corrigido
+- **Eliminação do Mascaramento de Modelos e Catálogo Gemini 2026 (`src/conrad_core.py`):**
+  - Remoção definitiva do `RUNTIME_MODEL_MAP` que desviava silenciosamente a seleção do usuário para `gemini-2.5-flash` (estourando a cota de 20 requisições/dia no Free Tier).
+  - Eliminação de qualquer fallback para o modelo descontinuado `gemini-2.5-flash-lite` (responsável pelo erro 404 NOT_FOUND exibido na tela).
+  - Atualização do catálogo `DEFINITIVE_MODELS` para os modelos ativos e testados na API (`gemini-3.8-flash`, `gemini-3.6-flash`, `gemini-3.5-flash`, `gemini-3.1-flash-lite`, `gemini-3.1-pro-preview`).
+  - Implementação de resiliência e failover transparente para o `gemini-3.5-flash` em caso de oscilação momentânea de alta demanda (503/Timeout).
+- **Botão Flutuante Persistente do Quadro Negro (`app.py`):**
+  - Correção arquitetural do botão de alternância da lousa: criação do componente flutuante fixo `.st-key-canvas_toggle_fixed_btn` (`position: fixed; top: 18px; right: 28px; z-index: 1005`), permanecendo 100% imóvel e acessível na tela mesmo com histórico longo de chat.
+  - Adição de botão de fechar diretamente no cabeçalho do Quadro Negro (`col_canvas`).
+- **Higienização do Banco de Dados (`src/database.py`):**
+  - Substituição de `datetime.utcnow()` por `datetime.now(timezone.utc)`, eliminando avisos de depreciação no Python 3.12/3.13.
+
 ## [3.4.0] - 27/10/2026
 
 ### Adicionado

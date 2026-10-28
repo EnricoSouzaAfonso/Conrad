@@ -1,8 +1,8 @@
 """
-Interface Web Autônoma do Conrad — Versão 3.4.0
+Interface Web Autônoma do Conrad — Versão 3.4.1
 Gems Pedagógicas Customizáveis (CRUD SQLite), Perfil Cognitivo Multidisciplinar,
 Sidebar Ergonômica (BYOK no Topo + Micro-Termômetro com Tooltip em Hover),
-Cabeçalho Sticky Persistente da Lousa, Botão '+' de Upload no Floating Dock
+Botão Flutuante Persistente da Lousa (position: fixed), Botão '+' de Upload no Floating Dock
 e Blindagem de Concorrência nos Botões de Download.
 """
 import os
@@ -170,20 +170,60 @@ st.markdown(
   }
 
   /* ==============================================================================
-     CABEÇALHO STICKY DO CHAT (CONTROLE PERSISTENTE DA LOUSA)
+     BOTÃO FLUTUANTE PERSISTENTE PARA ABRIR / OCULTAR O QUADRO NEGRO
      ============================================================================== */
-  .chat-sticky-header,
-  div[data-testid="stColumn"]:first-child div[data-testid="stHorizontalBlock"]:first-of-type {
-      position: sticky !important;
-      top: 0 !important;
-      z-index: 900 !important;
-      background: rgba(18, 18, 18, 0.92) !important;
+  header[data-testid="stHeader"] {
+      background: transparent !important;
+      pointer-events: none !important;
+  }
+  header[data-testid="stHeader"] button,
+  header[data-testid="stHeader"] a {
+      pointer-events: auto !important;
+  }
+  [data-testid="stAppDeployButton"],
+  [data-testid="stToolbarActions"] {
+      display: none !important;
+  }
+  [data-testid="stStatusWidget"] {
+      margin-right: 190px !important;
+  }
+  [data-testid="stMainMenu"] {
+      margin-right: 175px !important;
+  }
+  .st-key-canvas_toggle_fixed_btn,
+  div[data-testid="stElementContainer"]:has(.st-key-canvas_toggle_fixed_btn) {
+      position: fixed !important;
+      top: 14px !important;
+      right: 28px !important;
+      z-index: 999995 !important;
+      width: auto !important;
+  }
+  @supports not selector(:has(*)) {
+      div[data-testid="stElementContainer"].has-canvas-toggle-fixed {
+          position: fixed !important;
+          top: 14px !important;
+          right: 28px !important;
+          z-index: 999995 !important;
+          width: auto !important;
+      }
+  }
+  .st-key-canvas_toggle_fixed_btn button {
+      background: rgba(28, 28, 28, 0.92) !important;
       backdrop-filter: blur(12px) !important;
       -webkit-backdrop-filter: blur(12px) !important;
-      padding-top: 4px !important;
-      padding-bottom: 8px !important;
-      margin-bottom: 12px !important;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+      border: 1px solid rgba(255, 255, 255, 0.22) !important;
+      color: #f0f0f0 !important;
+      border-radius: 20px !important;
+      padding: 6px 16px !important;
+      font-size: 13px !important;
+      font-weight: 600 !important;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.45) !important;
+      transition: all 0.2s ease !important;
+  }
+  .st-key-canvas_toggle_fixed_btn button:hover:not(:disabled) {
+      border-color: #C59B27 !important;
+      color: #C59B27 !important;
+      transform: scale(1.05) !important;
   }
 
   /* ==============================================================================
@@ -375,6 +415,14 @@ st.markdown(
   if (typeof HTMLButtonElement !== 'undefined' && !HTMLButtonElement.prototype.hasOwnProperty('interestForElement')) {
     document.documentElement.dataset.interestPolyfillFallback = 'css-hover';
   }
+  if (typeof CSS !== 'undefined' && !CSS.supports('selector(:has(*))')) {
+    const containers = document.querySelectorAll('div[data-testid="stElementContainer"]');
+    containers.forEach(c => {
+      if (c.querySelector('.st-key-canvas_toggle_fixed_btn')) {
+        c.classList.add('has-canvas-toggle-fixed');
+      }
+    });
+  }
 </script>
 """,
     unsafe_allow_html=True,
@@ -385,7 +433,7 @@ if "engine" not in st.session_state:
     st.session_state.engine = ConradEngine()
 if "messages" not in st.session_state:
     st.session_state.messages = []
-if "selected_model_label" not in st.session_state:
+if "selected_model_label" not in st.session_state or st.session_state.selected_model_label not in DEFINITIVE_MODELS:
     st.session_state.selected_model_label = list(DEFINITIVE_MODELS.keys())[0]
 if "current_mode" not in st.session_state:
     st.session_state.current_mode = "socratico"
@@ -811,6 +859,12 @@ if st.session_state.canvas_collapsed:
 # ==============================================================================
 # --- ÁREA PRINCIPAL: DIVISÃO ADAPTATIVA (SPLIT-VIEW OU MODO EXPANDIDO) ---
 # ==============================================================================
+# Botão Flutuante Persistente de Controle da Lousa (Acompanha o Viewport em qualquer nível de scroll)
+btn_fixed_label = "📐 Abrir Lousa" if st.session_state.canvas_collapsed else "✖ Ocultar Lousa"
+if st.button(btn_fixed_label, key="canvas_toggle_fixed_btn", help="Alternar visualização do Quadro Negro lateral a qualquer momento"):
+    st.session_state.canvas_collapsed = not st.session_state.canvas_collapsed
+    st.rerun()
+
 if st.session_state.canvas_collapsed:
     # MODO EXPANDIDO: Chat ocupa a tela com largura confortável e centralizada
     col_chat = st.container()
@@ -820,14 +874,12 @@ else:
     col_chat, col_canvas = st.columns([1.1, 0.9], gap="medium")
 
 with col_chat:
-    # Cabeçalho Sticky Persistente do Chat com botão de alternância do Quadro Negro
-    st.markdown('<div class="chat-sticky-header"></div>', unsafe_allow_html=True)
-    col_title, col_toggle = st.columns([0.68, 0.32])
+    col_title, col_toggle = st.columns([0.70, 0.30])
     with col_title:
         st.subheader("🎩 Diálogo com Conrad")
     with col_toggle:
-        btn_label = "📐 Abrir Lousa" if st.session_state.canvas_collapsed else "✖ Ocultar Lousa"
-        if st.button(btn_label, use_container_width=True, help="Alternar visualização da lousa técnica lateral"):
+        btn_inline_label = "📐 Abrir Lousa" if st.session_state.canvas_collapsed else "✖ Ocultar Lousa"
+        if st.button(btn_inline_label, key="canvas_toggle_inline_btn", use_container_width=True, help="Alternar visualização da lousa técnica lateral"):
             st.session_state.canvas_collapsed = not st.session_state.canvas_collapsed
             st.rerun()
 
@@ -1067,7 +1119,13 @@ session_artifacts = _collect_session_artifacts()
 
 if col_canvas is not None:
     with col_canvas:
-        st.subheader("📐 Quadro Negro do Conrad")
+        col_c_head, col_c_close = st.columns([0.72, 0.28])
+        with col_c_head:
+            st.subheader("📐 Quadro Negro do Conrad")
+        with col_c_close:
+            if st.button("✖ Ocultar", key="canvas_close_col_btn", use_container_width=True, help="Ocultar o Quadro Negro lateral"):
+                st.session_state.canvas_collapsed = True
+                st.rerun()
 
         # Contêiner nativo com borda integrada — conteúdo 100% encapsulado
         canvas_card = st.container(border=True)

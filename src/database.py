@@ -6,7 +6,7 @@ e Gems Pedagógicas Customizáveis (PedagogicalGemDB).
 import os
 import re
 import unicodedata
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
@@ -29,12 +29,16 @@ DEFAULT_PEDAGOGICAL_NOTES = (
 )
 
 
+def _utcnow():
+    return datetime.now(timezone.utc)
+
+
 class StudentUser(Base):
     __tablename__ = "students"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), nullable=False)
     email = Column(String(150), unique=True, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)
     sessions = relationship("ChatSessionDB", back_populates="student")
 
 
@@ -43,7 +47,7 @@ class ChatSessionDB(Base):
     id = Column(String(50), primary_key=True, index=True)
     student_id = Column(Integer, ForeignKey("students.id"), nullable=True)
     topic = Column(String(150), default="Geral")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)
     student = relationship("StudentUser", back_populates="sessions")
     messages = relationship(
         "ChatMessageDB", back_populates="session", cascade="all, delete-orphan"
@@ -56,7 +60,7 @@ class ChatMessageDB(Base):
     session_id = Column(String(50), ForeignKey("chat_sessions.id"))
     sender = Column(String(20), nullable=False)  # 'user' ou 'conrad'
     content = Column(Text, nullable=False)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime, default=_utcnow)
     session = relationship("ChatSessionDB", back_populates="messages")
 
 
@@ -68,7 +72,7 @@ class StudentCognitiveProfile(Base):
     difficulties = Column(Text, default=DEFAULT_DIFFICULTIES)
     learning_style = Column(String(100), default=DEFAULT_LEARNING_STYLE)
     pedagogical_notes = Column(Text, default=DEFAULT_PEDAGOGICAL_NOTES)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
 class PedagogicalGemDB(Base):
@@ -79,7 +83,7 @@ class PedagogicalGemDB(Base):
     description = Column(String(255), nullable=False)
     system_directive = Column(Text, nullable=False)
     is_builtin = Column(Integer, default=0)  # 1 para as 4 oficiais (protegidas), 0 para customizadas
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)
 
 
 def get_or_create_profile(db, student_id: Optional[int] = None) -> StudentCognitiveProfile:
@@ -123,7 +127,7 @@ def reset_profile_to_default(db, student_id: Optional[int] = None) -> StudentCog
     profile.difficulties = DEFAULT_DIFFICULTIES
     profile.learning_style = DEFAULT_LEARNING_STYLE
     profile.pedagogical_notes = DEFAULT_PEDAGOGICAL_NOTES
-    profile.updated_at = datetime.utcnow()
+    profile.updated_at = _utcnow()
     db.commit()
     db.refresh(profile)
     return profile
@@ -147,7 +151,7 @@ def update_profile(
         profile.learning_style = learning_style
     if pedagogical_notes is not None:
         profile.pedagogical_notes = pedagogical_notes
-    profile.updated_at = datetime.utcnow()
+    profile.updated_at = _utcnow()
     db.commit()
     db.refresh(profile)
     return profile
@@ -196,7 +200,7 @@ def create_custom_gem(db, name: str, description: str, system_directive: str) ->
     """Cria uma nova Gem pedagógica customizada no banco SQLite."""
     normalized = unicodedata.normalize("NFKD", name or "").encode("ascii", "ignore").decode("ascii")
     slug = re.sub(r"[^a-zA-Z0-9_]+", "_", normalized.lower()).strip("_")[:40] or "gem"
-    gem_id = f"custom_{slug}_{int(datetime.utcnow().timestamp() * 1000)}"
+    gem_id = f"custom_{slug}_{int(_utcnow().timestamp() * 1000)}"
     gem = PedagogicalGemDB(
         gem_id=gem_id,
         name=(name or "Nova Gem").strip(),
