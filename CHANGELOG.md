@@ -5,6 +5,15 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [3.4.3] - 28/10/2026
+
+### Adicionado
+- **Suíte Automatizada de Testes de UX do Plano 11 (`tests/test_plano11_ux.py`):** Validação automatizada da unicidade do botão flutuante da lousa (`canvas_toggle_fixed_btn`), ausência dos botões redundantes (`canvas_toggle_inline_btn` e `canvas_close_col_btn`), bloqueio de cursor nos seletores (`caret-color: transparent`) e desativação instantânea dos downloads (`transition: none !important`, `lockDownloadButtonsImmediately` e `enforceReadonlySelectboxes`).
+
+### Modificado
+- **Unificação e Simplificação do Controle da Lousa (`app.py`):** Remoção dos botões inline redundantes no cabeçalho do chat (`canvas_toggle_inline_btn`) e no cabeçalho do Quadro Negro (`canvas_close_col_btn`), mantendo exclusivamente o botão flutuante persistente no canto superior direito (`canvas_toggle_fixed_btn`).
+- **Selectbox Read-Only e Desativação Instantânea (Zero Delay) dos Botões de Download (`app.py`):** Bloqueio do cursor de texto e digitação nos seletores (`div[data-testid="stSelectbox"] input`, `enforceReadonlySelectboxes()`) para uma experiência de dropdown puro, além de trava imediata no milissegundo do envio via seletores `:has()` (`transition: none !important; opacity: 0.35 !important; filter: grayscale(80%) !important;`) combinados com listeners de captura (`keydown` Enter e `click` no botão de envio) e `MutationObserver`.
+
 ## [3.4.2] - 28/10/2026
 
 ### Adicionado

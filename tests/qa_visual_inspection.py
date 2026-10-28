@@ -60,31 +60,33 @@ def _cdp_select_sidebar_model(ws, msg_id: int, search_text: str = "3.5 Flash") -
     _cdp_call(ws, msg_id, "Runtime.evaluate", {
         "expression": """
         (() => {
-            const inp = document.querySelector('[data-testid="stSidebar"] [data-baseweb="select"] input');
-            if (!inp) return;
-            inp.focus();
-            inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, which: 40, bubbles: true }));
+            const inp = document.querySelector('div[data-testid="stSelectbox"] input');
+            if (inp) inp.focus();
         })()
         """,
     })
-    time.sleep(0.5)
-    msg_id += 1
-    opt_res = _cdp_call(ws, msg_id, "Runtime.evaluate", {
-        "expression": f"""
-        (() => {{
-            const opts = Array.from(document.querySelectorAll('li[role="option"], [data-testid="stSelectboxVirtualDropdown"] li'));
-            const opt = opts.find(o => o.innerText && o.innerText.includes({json.dumps(search_text)}));
-            if (!opt) return null;
-            opt.click();
-            const r = opt.getBoundingClientRect();
-            return {{ x: r.left + r.width / 2, y: r.top + r.height / 2 }};
-        }})()
-        """,
-        "returnByValue": True,
-    })
-    opt_coords = opt_res.get("result", {}).get("value")
-    if opt_coords:
-        msg_id = _cdp_click_coords(ws, msg_id, opt_coords["x"], opt_coords["y"])
+    time.sleep(0.2)
+    # 1º ArrowDown abre o menu dropdown do BaseWeb; 2º e 3º navegam até Gemini 3.1 Flash Lite
+    for _ in range(3):
+        for ev_type in ("keyDown", "keyUp"):
+            msg_id += 1
+            _cdp_call(ws, msg_id, "Input.dispatchKeyEvent", {
+                "type": ev_type,
+                "key": "ArrowDown",
+                "code": "ArrowDown",
+                "windowsVirtualKeyCode": 40,
+                "nativeVirtualKeyCode": 40,
+            })
+        time.sleep(0.15)
+    for ev_type in ("keyDown", "keyUp"):
+        msg_id += 1
+        _cdp_call(ws, msg_id, "Input.dispatchKeyEvent", {
+            "type": ev_type,
+            "key": "Enter",
+            "code": "Enter",
+            "windowsVirtualKeyCode": 13,
+            "nativeVirtualKeyCode": 13,
+        })
     time.sleep(2.0)
     return msg_id
 
@@ -217,10 +219,11 @@ def _capture_live_streamlit_screenshots(url: str, output_png: str) -> bool:
                 with open(expanded_png, "wb") as f:
                     f.write(base64.b64decode(b64_expanded))
 
-            # Valida troca reativa de modelo na Sidebar (Gemini 3.8 Flash -> Gemini 3.5 Flash)
-            # e envia pergunta matemática para comprovar Auto-Reveal + fórmula DENTRO do Quadro Negro
-            msg_id = _cdp_select_sidebar_model(ws, msg_id, search_text="3.5 Flash")
+            # Seleciona "Gemini 3.1 Flash Lite (Alta Velocidade)" no selectbox read-only para validar o dropdown sem cursor
+            # e enviar a pergunta matemática comprovando Auto-Reveal + fórmula DENTRO do Quadro Negro
             formula_png = os.path.join(SCREENSHOT_DIR, "conrad_canvas_formula_homologado.png")
+            msg_id = _cdp_select_sidebar_model(ws, msg_id, "3.1 Flash Lite")
+
             msg_id += 1
             _cdp_call(ws, msg_id, "Runtime.evaluate", {
                 "expression": """
@@ -255,7 +258,7 @@ def _capture_live_streamlit_screenshots(url: str, output_png: str) -> bool:
             })
 
             # Aguarda o streaming concluir e o Quadro Negro atualizar com o badge MATH
-            for _ in range(35):
+            for _ in range(50):
                 time.sleep(0.5)
                 msg_id += 1
                 res = _cdp_call(ws, msg_id, "Runtime.evaluate", {

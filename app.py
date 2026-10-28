@@ -1,10 +1,8 @@
 """
-Interface Web Autônoma do Conrad — Versão 3.4.2
-Fidelidade Estrita de Modelos (1:1 Sem Mascaramento ou Fallbacks Ocultos),
-Gems Pedagógicas Customizáveis (CRUD SQLite), Perfil Cognitivo Multidisciplinar,
-Sidebar Ergonômica (BYOK no Topo + Micro-Termômetro com Tooltip em Hover),
-Botão Flutuante Persistente da Lousa (position: fixed), Botão '+' de Upload no Floating Dock
-e Blindagem de Concorrência nos Botões de Download.
+Interface Web Autônoma do Conrad — Versão 3.4.3
+Polimento de UX: Unificação do Botão Flutuante da Lousa, Selectbox Read-Only,
+Desativação Instantânea (Zero Delay) dos Botões de Download, Fidelidade Estrita 1:1 de Modelos,
+Gems Pedagógicas Customizáveis (CRUD SQLite) e Perfil Cognitivo Multidisciplinar.
 """
 import os
 import re
@@ -359,15 +357,36 @@ st.markdown(
       opacity: 1;
   }
 
+  /* Bloqueio do cursor de digitação no selectbox para experiência de dropdown puro */
+  div[data-testid="stSelectbox"] input {
+      caret-color: transparent !important;
+      cursor: pointer !important;
+      user-select: none !important;
+  }
+
   /* ==============================================================================
-     BLINDAGEM DE CONCORRÊNCIA NOS BOTÕES DE DOWNLOAD DURANTE GERAÇÃO DA IA
+     BLINDAGEM E DESATIVAÇÃO INSTANTÂNEA DOS BOTÕES DE DOWNLOAD (ZERO DELAY)
      ============================================================================== */
   .generating-active button[kind="primary"],
-  .generating-active [data-testid="stDownloadButton"] button,
-  [data-testid="stDownloadButton"] button:disabled {
+  .generating-active div[data-testid="stDownloadButton"] button,
+  [data-testid="stDownloadButton"] button:disabled,
+  div[data-testid="stDownloadButton"] button:disabled,
+  body:has(div[data-testid="stChatInput"] textarea:disabled) div[data-testid="stDownloadButton"] button,
+  .stApp:has([data-testid="stStatusWidget"]) div[data-testid="stDownloadButton"] button {
       pointer-events: none !important;
-      opacity: 0.40 !important;
+      opacity: 0.35 !important;
       cursor: not-allowed !important;
+      filter: grayscale(80%) !important;
+      transition: none !important; /* Elimina qualquer atraso de transição na desativação */
+  }
+  @supports not selector(:has(*)) {
+      .stApp.is-generating-fallback div[data-testid="stDownloadButton"] button {
+          pointer-events: none !important;
+          opacity: 0.35 !important;
+          cursor: not-allowed !important;
+          filter: grayscale(80%) !important;
+          transition: none !important;
+      }
   }
 
   /* Estilização elegante da moldura do Quadro Negro e proteção contra overflow de matrizes extensas */
@@ -404,7 +423,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Injeção de MathJax v3, Mermaid.js CDN e detecção de recurso para Interest Invokers
+# Injeção de MathJax v3, Mermaid.js CDN, Selectbox Read-Only e Trava Instantânea de Downloads
 st.markdown(
     """
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
@@ -424,7 +443,175 @@ st.markdown(
       }
     });
   }
+
+  // 1. Bloqueia digitação em todos os inputs de selectbox (Dropdown Puro / Read-Only)
+  function enforceReadonlySelectboxes() {
+    const inputs = document.querySelectorAll('div[data-testid="stSelectbox"] input');
+    inputs.forEach(inp => {
+      if (!inp.readOnly) {
+        inp.readOnly = true;
+        inp.setAttribute('readonly', 'readonly');
+        inp.style.cursor = 'pointer';
+        inp.style.caretColor = 'transparent';
+      }
+    });
+  }
+
+  // 2. Trava instantânea dos botões de download no milissegundo do envio
+  function lockDownloadButtonsImmediately() {
+    window._conradSubmittingTs = Date.now();
+    const appRoot = document.querySelector('.stApp');
+    if (appRoot) {
+      appRoot.classList.add('generating-active');
+      if (typeof CSS !== 'undefined' && !CSS.supports('selector(:has(*))')) {
+        appRoot.classList.add('is-generating-fallback');
+      }
+    }
+    const dlButtons = document.querySelectorAll('div[data-testid="stDownloadButton"] button');
+    dlButtons.forEach(btn => {
+      btn.disabled = true;
+      btn.setAttribute('disabled', 'disabled');
+      btn.setAttribute('aria-disabled', 'true');
+      btn.style.pointerEvents = 'none';
+      btn.style.opacity = '0.35';
+      btn.style.cursor = 'not-allowed';
+      btn.style.filter = 'grayscale(80%)';
+    });
+  }
+
+  function unlockDownloadButtons() {
+    const appRoot = document.querySelector('.stApp');
+    if (appRoot) {
+      appRoot.classList.remove('generating-active', 'is-generating-fallback');
+    }
+    const dlButtons = document.querySelectorAll('div[data-testid="stDownloadButton"] button');
+    dlButtons.forEach(btn => {
+      btn.disabled = false;
+      btn.removeAttribute('disabled');
+      btn.removeAttribute('aria-disabled');
+      btn.style.pointerEvents = '';
+      btn.style.opacity = '';
+      btn.style.cursor = '';
+      btn.style.filter = '';
+    });
+  }
+
+  // Escuta eventos de submissão do chat (tecla Enter e clique no botão de envio)
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey && e.target.closest('div[data-testid="stChatInput"]')) {
+      lockDownloadButtonsImmediately();
+    }
+  }, true);
+
+  document.addEventListener('click', function(e) {
+    if (e.target.closest('button[data-testid="stChatInputSubmitButton"]')) {
+      lockDownloadButtonsImmediately();
+    }
+  }, true);
+
+  // Observador contínuo para manter os selects read-only após re-renderizações do Streamlit
+  enforceReadonlySelectboxes();
+  if (window._conradObserver) {
+    window._conradObserver.disconnect();
+  }
+  window._conradObserver = new MutationObserver(() => {
+    enforceReadonlySelectboxes();
+    const isRunning = Boolean(document.querySelector('[data-testid="stStatusWidget"]'));
+    if (isRunning) {
+      window._conradSawRunning = true;
+      lockDownloadButtonsImmediately();
+    } else if (window._conradSawRunning || (window._conradSubmittingTs && Date.now() - window._conradSubmittingTs > 1500)) {
+      window._conradSawRunning = false;
+      window._conradSubmittingTs = 0;
+      unlockDownloadButtons();
+    }
+  });
+  window._conradObserver.observe(document.body, { childList: true, subtree: true });
 </script>
+<img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" style="display:none;" alt="" onload="
+  window.enforceReadonlySelectboxes = function() {
+    const inputs = document.querySelectorAll('div[data-testid=\\'stSelectbox\\'] input');
+    inputs.forEach(inp => {
+      inp.setAttribute('inputmode', 'none');
+      inp.style.cursor = 'pointer';
+      inp.style.caretColor = 'transparent';
+      inp.style.userSelect = 'none';
+    });
+  };
+  window.lockDownloadButtonsImmediately = function() {
+    window._conradSubmittingTs = Date.now();
+    const appRoot = document.querySelector('.stApp');
+    if (appRoot) {
+      appRoot.classList.add('generating-active');
+      if (typeof CSS !== 'undefined' && !CSS.supports('selector(:has(*))')) {
+        appRoot.classList.add('is-generating-fallback');
+      }
+    }
+    const dlButtons = document.querySelectorAll('div[data-testid=\\'stDownloadButton\\'] button');
+    dlButtons.forEach(btn => {
+      btn.disabled = true;
+      btn.setAttribute('disabled', 'disabled');
+      btn.setAttribute('aria-disabled', 'true');
+      btn.style.pointerEvents = 'none';
+      btn.style.opacity = '0.35';
+      btn.style.cursor = 'not-allowed';
+      btn.style.filter = 'grayscale(80%)';
+    });
+  };
+  window.unlockDownloadButtons = function() {
+    const appRoot = document.querySelector('.stApp');
+    if (appRoot) {
+      appRoot.classList.remove('generating-active', 'is-generating-fallback');
+    }
+    const dlButtons = document.querySelectorAll('div[data-testid=\\'stDownloadButton\\'] button');
+    dlButtons.forEach(btn => {
+      btn.disabled = false;
+      btn.removeAttribute('disabled');
+      btn.removeAttribute('aria-disabled');
+      btn.style.pointerEvents = '';
+      btn.style.opacity = '';
+      btn.style.cursor = '';
+      btn.style.filter = '';
+    });
+  };
+  if (!window._conradListenersBound) {
+    window._conradListenersBound = true;
+    document.addEventListener('keydown', function(e) {
+      if (e.target.closest && e.target.closest('div[data-testid=\\'stSelectbox\\']')) {
+        if (e.key.length === 1 || e.key === 'Backspace' || e.key === 'Delete') {
+          e.preventDefault();
+          e.stopPropagation();
+          return false;
+        }
+      }
+      if (e.key === 'Enter' && !e.shiftKey && e.target.closest && e.target.closest('div[data-testid=\\'stChatInput\\']')) {
+        window.lockDownloadButtonsImmediately();
+      }
+    }, true);
+    document.addEventListener('click', function(e) {
+      if (e.target.closest && e.target.closest('button[data-testid=\\'stChatInputSubmitButton\\']')) {
+        window.lockDownloadButtonsImmediately();
+      }
+    }, true);
+  }
+  window.enforceReadonlySelectboxes();
+  if (window._conradObserver) {
+    window._conradObserver.disconnect();
+  }
+  window._conradObserver = new MutationObserver(() => {
+    window.enforceReadonlySelectboxes();
+    const isRunning = Boolean(document.querySelector('[data-testid=\\'stStatusWidget\\']'));
+    if (isRunning) {
+      window._conradSawRunning = true;
+      window.lockDownloadButtonsImmediately();
+    } else if (window._conradSawRunning || (window._conradSubmittingTs && Date.now() - window._conradSubmittingTs > 1500)) {
+      window._conradSawRunning = false;
+      window._conradSubmittingTs = 0;
+      window.unlockDownloadButtons();
+    }
+  });
+  window._conradObserver.observe(document.body, { childList: true, subtree: true });
+" />
 """,
     unsafe_allow_html=True,
 )
@@ -880,14 +1067,7 @@ else:
     col_chat, col_canvas = st.columns([1.1, 0.9], gap="medium")
 
 with col_chat:
-    col_title, col_toggle = st.columns([0.70, 0.30])
-    with col_title:
-        st.subheader("🎩 Diálogo com Conrad")
-    with col_toggle:
-        btn_inline_label = "📐 Abrir Lousa" if st.session_state.canvas_collapsed else "✖ Ocultar Lousa"
-        if st.button(btn_inline_label, key="canvas_toggle_inline_btn", use_container_width=True, help="Alternar visualização da lousa técnica lateral"):
-            st.session_state.canvas_collapsed = not st.session_state.canvas_collapsed
-            st.rerun()
+    st.subheader("🎩 Diálogo com Conrad")
 
     st.caption(
         f"Gem: **{active_gem_data['name']}** | Modelo Ativo: `{st.session_state.engine.model_name}`"
@@ -1125,13 +1305,7 @@ session_artifacts = _collect_session_artifacts()
 
 if col_canvas is not None:
     with col_canvas:
-        col_c_head, col_c_close = st.columns([0.72, 0.28])
-        with col_c_head:
-            st.subheader("📐 Quadro Negro do Conrad")
-        with col_c_close:
-            if st.button("✖ Ocultar", key="canvas_close_col_btn", use_container_width=True, help="Ocultar o Quadro Negro lateral"):
-                st.session_state.canvas_collapsed = True
-                st.rerun()
+        st.subheader("📐 Quadro Negro do Conrad")
 
         # Contêiner nativo com borda integrada — conteúdo 100% encapsulado
         canvas_card = st.container(border=True)
