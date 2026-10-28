@@ -1,5 +1,6 @@
 import os
 import re
+import time
 import html
 from typing import Optional
 from google import genai
@@ -20,7 +21,6 @@ DEFINITIVE_MODELS = {
 }
 
 DEFAULT_MODEL_NAME = "gemini-3.8-flash"
-FALLBACK_MODEL_NAME = "gemini-3.5-flash"  # Modelo com 100% de disponibilidade comprovada na API
 
 # Limite seguro de caracteres por prompt para evitar estouro de payload HTTP/DOM mantendo suporte a 20k+ chars
 MAX_SAFE_PROMPT_CHARS = 32000
@@ -53,7 +53,7 @@ class ConradEngine:
 
     @staticmethod
     def _get_runtime_model(model_name: str) -> str:
-        """Retorna o modelo solicitado diretamente pelo usuário, sem mascaramento ou desvio."""
+        """Retorna rigorosamente o modelo solicitado pelo usuário."""
         return model_name or DEFAULT_MODEL_NAME
 
     @staticmethod
@@ -77,8 +77,7 @@ class ConradEngine:
             )
         return text
 
-    @staticmethod
-    def _format_resilient_error(err: Exception) -> str:
+    def _format_resilient_error(self, err: Exception) -> str:
         """
         Traduz exceções da API (Timeout, 429 Quota, 401/403 Key Inválida, 503) em mensagens
         pedagógicas amigáveis para garantir Zero Crash (nunca exibir tela branca/traceback).
@@ -94,9 +93,9 @@ class ConradEngine:
             )
         if "503" in upper or "HIGH DEMAND" in upper or "UNAVAILABLE" in upper:
             return (
-                "⚡ **Alta Demanda Momentânea nos Servidores (Erro 503):** "
-                "O modelo selecionado está enfrentando pico de tráfego temporário no Google AI Studio. "
-                "Por favor, tente novamente em alguns segundos ou selecione o **Gemini 3.5 Flash** na barra lateral para resposta imediata! 🎩"
+                f"⚡ **Alta Demanda no Modelo {self.model_name} (Erro 503):** "
+                "O modelo selecionado está enfrentando pico temporário de requisições no Google AI Studio. "
+                "Por favor, tente enviar novamente em alguns segundos ou, se preferir, selecione outro modelo na barra lateral! 🎩"
             )
         if "TIMEOUT" in upper or "TIMED OUT" in upper or "DEADLINE_EXCEEDED" in upper or "504" in upper:
             return (
@@ -184,7 +183,7 @@ class ConradEngine:
         """Cria instância do genai.Client com timeout ajustado e sem loop de retry bloqueante."""
         try:
             http_opts = types.HttpOptions(
-                timeout=12000,
+                timeout=30000,
                 retry_options=types.HttpRetryOptions(attempts=1),
             )
             return genai.Client(api_key=api_key, http_options=http_opts)
@@ -250,9 +249,10 @@ class ConradEngine:
             ],
         )
 
-    def _init_chat(self, effective_model: Optional[str] = None, history=None):
+    def _init_chat(self, history=None):
+        """Inicializa a sessão de chat estritamente com o modelo selecionado pelo usuário."""
         config = self._build_chat_config()
-        target_model = effective_model or self._get_runtime_model(self.model_name)
+        target_model = self.model_name or DEFAULT_MODEL_NAME
         self._active_runtime_model = target_model
         if history:
             self.chat = self.client.chats.create(model=target_model, config=config, history=history)
@@ -273,9 +273,9 @@ class ConradEngine:
                 response = self.chat.send_message(clean_prompt)
             except Exception as err:
                 err_up = str(err).upper()
-                if self.model_name != FALLBACK_MODEL_NAME and any(k in err_up for k in ("503", "UNAVAILABLE", "HIGH DEMAND", "TIMEOUT", "TIMED OUT", "DEADLINE_EXCEEDED", "504")):
-                    prev_hist = self.chat.get_history() if hasattr(self.chat, "get_history") else None
-                    self._init_chat(effective_model=FALLBACK_MODEL_NAME, history=prev_hist)
+                # Retry pontual de 2 segundos NO MESMO MODELO em caso de 503 momentâneo
+                if any(k in err_up for k in ("503", "UNAVAILABLE", "HIGH DEMAND")):
+                    time.sleep(2)
                     response = self.chat.send_message(clean_prompt)
                 else:
                     raise err
@@ -316,9 +316,9 @@ class ConradEngine:
                 response = self.chat.send_message(contents)
             except Exception as err:
                 err_up = str(err).upper()
-                if self.model_name != FALLBACK_MODEL_NAME and any(k in err_up for k in ("503", "UNAVAILABLE", "HIGH DEMAND", "TIMEOUT", "TIMED OUT", "DEADLINE_EXCEEDED", "504")):
-                    prev_hist = self.chat.get_history() if hasattr(self.chat, "get_history") else None
-                    self._init_chat(effective_model=FALLBACK_MODEL_NAME, history=prev_hist)
+                # Retry pontual de 2 segundos NO MESMO MODELO em caso de 503 momentâneo
+                if any(k in err_up for k in ("503", "UNAVAILABLE", "HIGH DEMAND")):
+                    time.sleep(2)
                     response = self.chat.send_message(contents)
                 else:
                     raise err
@@ -347,9 +347,9 @@ class ConradEngine:
                         yield chunk.text
             except Exception as err:
                 err_up = str(err).upper()
-                if not yielded_any and self.model_name != FALLBACK_MODEL_NAME and any(k in err_up for k in ("503", "UNAVAILABLE", "HIGH DEMAND", "TIMEOUT", "TIMED OUT", "DEADLINE_EXCEEDED", "504")):
-                    prev_hist = self.chat.get_history() if hasattr(self.chat, "get_history") else None
-                    self._init_chat(effective_model=FALLBACK_MODEL_NAME, history=prev_hist)
+                # Retry pontual de 2 segundos NO MESMO MODELO em caso de 503 momentâneo
+                if not yielded_any and any(k in err_up for k in ("503", "UNAVAILABLE", "HIGH DEMAND")):
+                    time.sleep(2)
                     response_stream = self.chat.send_message_stream(clean_prompt)
                     for chunk in response_stream:
                         if getattr(chunk, "text", None):

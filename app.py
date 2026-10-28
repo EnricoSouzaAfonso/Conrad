@@ -1,5 +1,6 @@
 """
-Interface Web Autônoma do Conrad — Versão 3.4.1
+Interface Web Autônoma do Conrad — Versão 3.4.2
+Fidelidade Estrita de Modelos (1:1 Sem Mascaramento ou Fallbacks Ocultos),
 Gems Pedagógicas Customizáveis (CRUD SQLite), Perfil Cognitivo Multidisciplinar,
 Sidebar Ergonômica (BYOK no Topo + Micro-Termômetro com Tooltip em Hover),
 Botão Flutuante Persistente da Lousa (position: fixed), Botão '+' de Upload no Floating Dock
@@ -633,7 +634,11 @@ with st.sidebar:
     if selected_model_id != st.session_state.engine.model_name:
         st.session_state.selected_model_label = selected_label
         st.session_state.engine.set_model(selected_model_id)
-        st.toast(f"Modelo alterado para {selected_model_id}!", icon="🎩")
+        st.toast(f"Modelo alterado para {selected_model_id}!", icon="🤖")
+        st.rerun()  # Força atualização imediata do ciclo de vida do Streamlit
+
+    # Badge de confirmação transparente
+    st.caption(f"⚡ Motor ativo no backend: `{st.session_state.engine.model_name}`")
 
     st.divider()
 
@@ -778,7 +783,8 @@ with st.sidebar:
         st.session_state.cached_tokens = 0
         st.session_state.pending_upload = None
         if st.session_state.engine.api_key:
-            st.session_state.engine._init_chat()
+            # Garante que o novo chat use estritamente o modelo configurado
+            st.session_state.engine.set_model(st.session_state.engine.model_name)
         st.rerun()
 
 
@@ -884,7 +890,7 @@ with col_chat:
             st.rerun()
 
     st.caption(
-        f"Gem: **{active_gem_data['name']}** | Modelo: `{st.session_state.engine.model_name}`"
+        f"Gem: **{active_gem_data['name']}** | Modelo Ativo: `{st.session_state.engine.model_name}`"
     )
 
     # Renderização das mensagens em trilha única (sem container de scroll aninhado)
@@ -999,7 +1005,7 @@ with col_chat:
                                     response_placeholder.markdown(full_text + "▌")
                                     last_render_time = now
                     except Exception as exc:
-                        full_text = ConradEngine._format_resilient_error(exc)
+                        full_text = st.session_state.engine._format_resilient_error(exc)
 
                     # Ao terminar o streaming: executa o parse final completo de uma única vez
                     text_without_thought, extracted_thought = CanvasParser.parse_thought(full_text)

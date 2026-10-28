@@ -35,6 +35,60 @@ def _cdp_call(ws, msg_id: int, method: str, params: dict = None) -> dict:
             return data.get("result", {})
 
 
+def _cdp_click_coords(ws, msg_id: int, x: float, y: float) -> int:
+    msg_id += 1
+    _cdp_call(ws, msg_id, "Input.dispatchMouseEvent", {
+        "type": "mousePressed",
+        "x": x,
+        "y": y,
+        "button": "left",
+        "clickCount": 1,
+    })
+    msg_id += 1
+    _cdp_call(ws, msg_id, "Input.dispatchMouseEvent", {
+        "type": "mouseReleased",
+        "x": x,
+        "y": y,
+        "button": "left",
+        "clickCount": 1,
+    })
+    return msg_id
+
+
+def _cdp_select_sidebar_model(ws, msg_id: int, search_text: str = "3.5 Flash") -> int:
+    msg_id += 1
+    _cdp_call(ws, msg_id, "Runtime.evaluate", {
+        "expression": """
+        (() => {
+            const inp = document.querySelector('[data-testid="stSidebar"] [data-baseweb="select"] input');
+            if (!inp) return;
+            inp.focus();
+            inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, which: 40, bubbles: true }));
+        })()
+        """,
+    })
+    time.sleep(0.5)
+    msg_id += 1
+    opt_res = _cdp_call(ws, msg_id, "Runtime.evaluate", {
+        "expression": f"""
+        (() => {{
+            const opts = Array.from(document.querySelectorAll('li[role="option"], [data-testid="stSelectboxVirtualDropdown"] li'));
+            const opt = opts.find(o => o.innerText && o.innerText.includes({json.dumps(search_text)}));
+            if (!opt) return null;
+            opt.click();
+            const r = opt.getBoundingClientRect();
+            return {{ x: r.left + r.width / 2, y: r.top + r.height / 2 }};
+        }})()
+        """,
+        "returnByValue": True,
+    })
+    opt_coords = opt_res.get("result", {}).get("value")
+    if opt_coords:
+        msg_id = _cdp_click_coords(ws, msg_id, opt_coords["x"], opt_coords["y"])
+    time.sleep(2.0)
+    return msg_id
+
+
 def _capture_live_streamlit_screenshots(url: str, output_png: str) -> bool:
     """
     Conecta via Chrome DevTools Protocol (CDP), aguarda a renderização completa
@@ -163,7 +217,9 @@ def _capture_live_streamlit_screenshots(url: str, output_png: str) -> bool:
                 with open(expanded_png, "wb") as f:
                     f.write(base64.b64decode(b64_expanded))
 
-            # Com a lousa oculta, envia pergunta matemática para comprovar Auto-Reveal + fórmula DENTRO do Quadro Negro
+            # Valida troca reativa de modelo na Sidebar (Gemini 3.8 Flash -> Gemini 3.5 Flash)
+            # e envia pergunta matemática para comprovar Auto-Reveal + fórmula DENTRO do Quadro Negro
+            msg_id = _cdp_select_sidebar_model(ws, msg_id, search_text="3.5 Flash")
             formula_png = os.path.join(SCREENSHOT_DIR, "conrad_canvas_formula_homologado.png")
             msg_id += 1
             _cdp_call(ws, msg_id, "Runtime.evaluate", {
@@ -199,7 +255,7 @@ def _capture_live_streamlit_screenshots(url: str, output_png: str) -> bool:
             })
 
             # Aguarda o streaming concluir e o Quadro Negro atualizar com o badge MATH
-            for _ in range(55):
+            for _ in range(35):
                 time.sleep(0.5)
                 msg_id += 1
                 res = _cdp_call(ws, msg_id, "Runtime.evaluate", {

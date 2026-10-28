@@ -5,6 +5,15 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [3.4.2] - 28/10/2026
+
+### Adicionado
+- **Suíte Automatizada de Fidelidade Estrita de Modelos (`tests/test_fidelidade_modelos.py`):** Validação automatizada garantindo ausência de `RUNTIME_MODEL_MAP` e `FALLBACK_MODEL_NAME`, instanciação 1:1 de `chats.create` para todos os 5 modelos do catálogo `DEFINITIVE_MODELS` e preservação estrita do modelo configurado mesmo sob erro `503 UNAVAILABLE`.
+- **Badge de Transparência do Motor Ativo e Reatividade Imediata na UI (`app.py`):** Exibição explícita de `⚡ Motor ativo no backend: <model_id>` na barra lateral, `Modelo Ativo: <model_id>` no cabeçalho do chat e `st.rerun()` imediato ao alternar o modelo no seletor ou iniciar nova conversa.
+
+### Modificado
+- **Fidelidade Estrita 1:1 e Eliminação de Fallbacks Silenciosos (`src/conrad_core.py`):** Remoção definitiva de `FALLBACK_MODEL_NAME` e de qualquer troca automática de modelo em `send_message`, `send_message_multimodal` e `send_message_stream`. Em caso de `503 UNAVAILABLE`, o motor executa 1 *retry* pontual (2s) no **mesmo** modelo selecionado pelo usuário e, se persistir, apresenta diagnóstico transparente com o nome do modelo ativo (`⚡ Alta Demanda no Modelo <model_name> (Erro 503)`), mantendo 100% do controle de escolha nas mãos do usuário.
+
 ## [3.4.1] - 28/10/2026
 
 ### Corrigido
