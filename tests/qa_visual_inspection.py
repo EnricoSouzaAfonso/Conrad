@@ -24,6 +24,9 @@ if ROOT_DIR not in sys.path:
 SCREENSHOT_DIR = os.path.join(os.path.dirname(__file__), "screenshots")
 os.makedirs(SCREENSHOT_DIR, exist_ok=True)
 
+# Resultados de verificações executadas no navegador real (preenchidos durante a captura)
+LIVE_CHECKS = {}
+
 
 def _cdp_call(ws, msg_id: int, method: str, params: dict = None) -> dict:
     payload = {"id": msg_id, "method": method, "params": params or {}}
@@ -53,6 +56,91 @@ def _cdp_click_coords(ws, msg_id: int, x: float, y: float) -> int:
         "clickCount": 1,
     })
     return msg_id
+
+
+def _cdp_key(ws, msg_id: int, key: str, code: str, vk: int, modifiers: int = 0, text: str = None) -> int:
+    for ev_type in ("keyDown", "keyUp"):
+        msg_id += 1
+        params = {"type": ev_type, "key": key, "code": code, "windowsVirtualKeyCode": vk,
+                  "nativeVirtualKeyCode": vk, "modifiers": modifiers}
+        if text and ev_type == "keyDown":
+            params["text"] = text
+        _cdp_call(ws, msg_id, "Input.dispatchKeyEvent", params)
+    return msg_id
+
+
+_SELECT_STATE_JS = """
+(() => {
+  const sb = document.querySelector('[data-testid="stSidebar"] div[data-testid="stSelectbox"]');
+  if (!sb) return null;
+  const inp = sb.querySelector('input');
+  const grp = sb.querySelector('[role="group"]') || sb;
+  const r = grp.getBoundingClientRect();
+  return {
+    value: inp ? inp.value : '',
+    readOnly: inp ? inp.readOnly : false,
+    selStart: inp ? inp.selectionStart : 0,
+    selEnd: inp ? inp.selectionEnd : 0,
+    x: r.left + r.width / 2,
+    y: r.top + r.height / 2,
+  };
+})()
+"""
+
+
+def _cdp_attack_model_selectbox(ws, msg_id: int):
+    """
+    Tenta editar o seletor de modelo como um usuário faria (Ctrl+A, Backspace, Delete, digitar,
+    colar, duplo clique para selecionar). O campo deve permanecer intacto e somente-seleção.
+    """
+    def state():
+        nonlocal msg_id
+        msg_id += 1
+        return _cdp_call(ws, msg_id, "Runtime.evaluate", {
+            "expression": _SELECT_STATE_JS, "returnByValue": True,
+        }).get("result", {}).get("value")
+
+    s0 = state()
+    if not s0:
+        return msg_id, False, {"erro": "selectbox de modelo não encontrado"}
+
+    msg_id = _cdp_click_coords(ws, msg_id, s0["x"], s0["y"])
+    time.sleep(0.4)
+    msg_id = _cdp_key(ws, msg_id, "a", "KeyA", 65, modifiers=2)  # Ctrl+A
+    msg_id = _cdp_key(ws, msg_id, "Backspace", "Backspace", 8)
+    msg_id = _cdp_key(ws, msg_id, "Delete", "Delete", 46)
+    for ch in "xyz":
+        msg_id = _cdp_key(ws, msg_id, ch, f"Key{ch.upper()}", ord(ch.upper()), text=ch)
+    msg_id += 1
+    _cdp_call(ws, msg_id, "Input.insertText", {"text": "texto colado"})
+    time.sleep(0.3)
+    s1 = state()
+    msg_id = _cdp_key(ws, msg_id, "Escape", "Escape", 27)
+    time.sleep(0.3)
+
+    msg_id = _cdp_click_coords(ws, msg_id, s0["x"] - 60, s0["y"])
+    msg_id += 1
+    _cdp_call(ws, msg_id, "Input.dispatchMouseEvent", {
+        "type": "mousePressed", "x": s0["x"] - 60, "y": s0["y"], "button": "left", "clickCount": 2,
+    })
+    msg_id += 1
+    _cdp_call(ws, msg_id, "Input.dispatchMouseEvent", {
+        "type": "mouseReleased", "x": s0["x"] - 60, "y": s0["y"], "button": "left", "clickCount": 2,
+    })
+    time.sleep(0.2)
+    msg_id = _cdp_key(ws, msg_id, "Backspace", "Backspace", 8)
+    msg_id = _cdp_key(ws, msg_id, "Escape", "Escape", 27)
+    time.sleep(0.4)
+    s2 = state()
+
+    ok = bool(
+        s1 and s2
+        and s1["value"] == s0["value"] and s2["value"] == s0["value"]
+        and s1["readOnly"] is True
+        and s2["selStart"] == s2["selEnd"]
+    )
+    return msg_id, ok, {"inicial": s0["value"], "apos_digitar_colar": s1 and s1["value"],
+                        "apos_duplo_clique": s2 and s2["value"]}
 
 
 def _cdp_select_sidebar_model(ws, msg_id: int, search_text: str = "3.5 Flash") -> int:
@@ -198,6 +286,9 @@ def _capture_live_streamlit_screenshots(url: str, output_png: str) -> bool:
                 with open(output_png, "wb") as f:
                     f.write(base64.b64decode(b64_data))
 
+            # Ataque real ao seletor de modelo: deve ser somente-seleção (sem digitar/selecionar/apagar)
+            msg_id, readonly_ok, readonly_info = _cdp_attack_model_selectbox(ws, msg_id)
+            LIVE_CHECKS["selectbox_somente_selecao"] = (readonly_ok, readonly_info)
             # Clica em "✖ Ocultar Lousa" para comprovar a retração da lousa e expansão centralizada do chat
             expanded_png = os.path.join(SCREENSHOT_DIR, "conrad_canvas_retratil_expandido.png")
             msg_id += 1
@@ -439,6 +530,11 @@ def run_qa_suite():
         f.write("Status: APROVADO PARA COMMIT E DEPLOY.\n")
 
     print(f"✅ Evidências registradas em: {SCREENSHOT_DIR}")
+
+    if screenshot_ok:
+        readonly_ok, readonly_info = LIVE_CHECKS.get("selectbox_somente_selecao", (False, {"erro": "não executado"}))
+        assert readonly_ok, f"Falha: o seletor de modelo aceitou edição de texto no navegador real! {readonly_info}"
+        print("✅ Seletor de Modelo somente-seleção: Ctrl+A, Backspace, Delete, digitação, colagem e duplo clique bloqueados no navegador real!")
 
     # 5. Auditoria da Suíte de Rigor Pedagógico v3.0
     print("\n[Passo 5/5] Executando auditoria da Suíte de Rigor Pedagógico v3.0...")

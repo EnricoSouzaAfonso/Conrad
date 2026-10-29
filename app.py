@@ -1,5 +1,5 @@
 """
-Interface Web Autônoma do Conrad — Versão 3.4.3
+Interface Web Autônoma do Conrad — Versão 3.4.4
 Polimento de UX: Unificação do Botão Flutuante da Lousa, Selectbox Read-Only,
 Desativação Instantânea (Zero Delay) dos Botões de Download, Fidelidade Estrita 1:1 de Modelos,
 Gems Pedagógicas Customizáveis (CRUD SQLite) e Perfil Cognitivo Multidisciplinar.
@@ -423,7 +423,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Injeção de MathJax v3, Mermaid.js CDN, Selectbox Read-Only e Trava Instantânea de Downloads
+# Injeção de MathJax v3 e Mermaid.js CDN
 st.markdown(
     """
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
@@ -444,20 +444,55 @@ st.markdown(
     });
   }
 
-  // 1. Bloqueia digitação em todos os inputs de selectbox (Dropdown Puro / Read-Only)
+</script>
+""",
+    unsafe_allow_html=True,
+)
+
+# Seletores Dropdown Puro (sem digitar/selecionar/apagar texto) e Trava Instantânea dos Downloads.
+# IMPORTANTE: st.markdown sanitiza <script> e handlers inline (onload); por isso o JS roda via
+# st.html(..., unsafe_allow_javascript=True), que executa o script de fato no documento principal.
+st.html(
+    """
+<span id="conrad-ux-guard" hidden></span>
+<style>
+  /* O contêiner deste bloco só carrega o script: não ocupa espaço no layout */
+  div[data-testid="stElementContainer"]:has(#conrad-ux-guard) { display: none !important; }
+</style>
+<script>
+(function () {
+  const SELECT_SCOPE = 'div[data-testid="stSelectbox"]';
+  const DL_BUTTONS = 'div[data-testid="stDownloadButton"] button';
+
+  // 1. Selectbox somente-seleção: o usuário apenas troca a opção (clique/setas), nunca edita o texto
   function enforceReadonlySelectboxes() {
-    const inputs = document.querySelectorAll('div[data-testid="stSelectbox"] input');
-    inputs.forEach(inp => {
+    document.querySelectorAll(SELECT_SCOPE + ' input').forEach(function (inp) {
       if (!inp.readOnly) {
         inp.readOnly = true;
-        inp.setAttribute('readonly', 'readonly');
-        inp.style.cursor = 'pointer';
-        inp.style.caretColor = 'transparent';
+      }
+      inp.setAttribute('inputmode', 'none');
+      inp.style.cursor = 'pointer';
+      inp.style.caretColor = 'transparent';
+      inp.style.userSelect = 'none';
+      if (!inp.dataset.conradLocked) {
+        inp.dataset.conradLocked = '1';
+        const collapseSelection = function () {
+          try {
+            const n = inp.value.length;
+            inp.setSelectionRange(n, n);
+          } catch (err) {}
+        };
+        ['select', 'mouseup', 'focus', 'keyup'].forEach(function (t) {
+          inp.addEventListener(t, collapseSelection);
+        });
+        inp.addEventListener('mousedown', function (e) {
+          if (e.detail > 1) { e.preventDefault(); }  // impede seleção de palavra/linha por duplo/triplo clique
+        });
       }
     });
   }
 
-  // 2. Trava instantânea dos botões de download no milissegundo do envio
+  // 2. Trava instantânea (0 ms) dos botões de download no envio do prompt
   function lockDownloadButtonsImmediately() {
     window._conradSubmittingTs = Date.now();
     const appRoot = document.querySelector('.stApp');
@@ -467,10 +502,8 @@ st.markdown(
         appRoot.classList.add('is-generating-fallback');
       }
     }
-    const dlButtons = document.querySelectorAll('div[data-testid="stDownloadButton"] button');
-    dlButtons.forEach(btn => {
+    document.querySelectorAll(DL_BUTTONS).forEach(function (btn) {
       btn.disabled = true;
-      btn.setAttribute('disabled', 'disabled');
       btn.setAttribute('aria-disabled', 'true');
       btn.style.pointerEvents = 'none';
       btn.style.opacity = '0.35';
@@ -484,10 +517,8 @@ st.markdown(
     if (appRoot) {
       appRoot.classList.remove('generating-active', 'is-generating-fallback');
     }
-    const dlButtons = document.querySelectorAll('div[data-testid="stDownloadButton"] button');
-    dlButtons.forEach(btn => {
+    document.querySelectorAll(DL_BUTTONS).forEach(function (btn) {
       btn.disabled = false;
-      btn.removeAttribute('disabled');
       btn.removeAttribute('aria-disabled');
       btn.style.pointerEvents = '';
       btn.style.opacity = '';
@@ -496,25 +527,51 @@ st.markdown(
     });
   }
 
-  // Escuta eventos de submissão do chat (tecla Enter e clique no botão de envio)
-  document.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter' && !e.shiftKey && e.target.closest('div[data-testid="stChatInput"]')) {
-      lockDownloadButtonsImmediately();
-    }
-  }, true);
+  window.enforceReadonlySelectboxes = enforceReadonlySelectboxes;
+  window.lockDownloadButtonsImmediately = lockDownloadButtonsImmediately;
+  window.unlockDownloadButtons = unlockDownloadButtons;
 
-  document.addEventListener('click', function(e) {
-    if (e.target.closest('button[data-testid="stChatInputSubmitButton"]')) {
-      lockDownloadButtonsImmediately();
-    }
-  }, true);
+  if (!window._conradUxListenersBound) {
+    window._conradUxListenersBound = true;
 
-  // Observador contínuo para manter os selects read-only após re-renderizações do Streamlit
+    // Bloqueia qualquer edição de texto nos selectboxes (digitar, apagar, colar, recortar, arrastar)
+    ['beforeinput', 'paste', 'cut', 'drop', 'dragstart'].forEach(function (t) {
+      document.addEventListener(t, function (e) {
+        if (e.target.closest && e.target.closest(SELECT_SCOPE)) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }, true);
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.target.closest && e.target.closest(SELECT_SCOPE)) {
+        const editKey = e.key.length === 1 || e.key === 'Backspace' || e.key === 'Delete';
+        const editShortcut = (e.ctrlKey || e.metaKey) && ['a', 'x', 'v', 'z', 'y'].indexOf(e.key.toLowerCase()) !== -1;
+        if (editKey || editShortcut) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+      }
+      if (e.key === 'Enter' && !e.shiftKey && e.target.closest && e.target.closest('div[data-testid="stChatInput"]')) {
+        lockDownloadButtonsImmediately();
+      }
+    }, true);
+
+    document.addEventListener('click', function (e) {
+      if (e.target.closest && e.target.closest('button[data-testid="stChatInputSubmitButton"]')) {
+        lockDownloadButtonsImmediately();
+      }
+    }, true);
+  }
+
+  // Observador contínuo: reaplica o read-only após cada re-renderização e sincroniza a trava dos downloads
   enforceReadonlySelectboxes();
   if (window._conradObserver) {
     window._conradObserver.disconnect();
   }
-  window._conradObserver = new MutationObserver(() => {
+  window._conradObserver = new MutationObserver(function () {
     enforceReadonlySelectboxes();
     const isRunning = Boolean(document.querySelector('[data-testid="stStatusWidget"]'));
     if (isRunning) {
@@ -526,94 +583,11 @@ st.markdown(
       unlockDownloadButtons();
     }
   });
-  window._conradObserver.observe(document.body, { childList: true, subtree: true });
+  window._conradObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['readonly'] });
+})();
 </script>
-<img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" style="display:none;" alt="" onload="
-  window.enforceReadonlySelectboxes = function() {
-    const inputs = document.querySelectorAll('div[data-testid=\\'stSelectbox\\'] input');
-    inputs.forEach(inp => {
-      inp.setAttribute('inputmode', 'none');
-      inp.style.cursor = 'pointer';
-      inp.style.caretColor = 'transparent';
-      inp.style.userSelect = 'none';
-    });
-  };
-  window.lockDownloadButtonsImmediately = function() {
-    window._conradSubmittingTs = Date.now();
-    const appRoot = document.querySelector('.stApp');
-    if (appRoot) {
-      appRoot.classList.add('generating-active');
-      if (typeof CSS !== 'undefined' && !CSS.supports('selector(:has(*))')) {
-        appRoot.classList.add('is-generating-fallback');
-      }
-    }
-    const dlButtons = document.querySelectorAll('div[data-testid=\\'stDownloadButton\\'] button');
-    dlButtons.forEach(btn => {
-      btn.disabled = true;
-      btn.setAttribute('disabled', 'disabled');
-      btn.setAttribute('aria-disabled', 'true');
-      btn.style.pointerEvents = 'none';
-      btn.style.opacity = '0.35';
-      btn.style.cursor = 'not-allowed';
-      btn.style.filter = 'grayscale(80%)';
-    });
-  };
-  window.unlockDownloadButtons = function() {
-    const appRoot = document.querySelector('.stApp');
-    if (appRoot) {
-      appRoot.classList.remove('generating-active', 'is-generating-fallback');
-    }
-    const dlButtons = document.querySelectorAll('div[data-testid=\\'stDownloadButton\\'] button');
-    dlButtons.forEach(btn => {
-      btn.disabled = false;
-      btn.removeAttribute('disabled');
-      btn.removeAttribute('aria-disabled');
-      btn.style.pointerEvents = '';
-      btn.style.opacity = '';
-      btn.style.cursor = '';
-      btn.style.filter = '';
-    });
-  };
-  if (!window._conradListenersBound) {
-    window._conradListenersBound = true;
-    document.addEventListener('keydown', function(e) {
-      if (e.target.closest && e.target.closest('div[data-testid=\\'stSelectbox\\']')) {
-        if (e.key.length === 1 || e.key === 'Backspace' || e.key === 'Delete') {
-          e.preventDefault();
-          e.stopPropagation();
-          return false;
-        }
-      }
-      if (e.key === 'Enter' && !e.shiftKey && e.target.closest && e.target.closest('div[data-testid=\\'stChatInput\\']')) {
-        window.lockDownloadButtonsImmediately();
-      }
-    }, true);
-    document.addEventListener('click', function(e) {
-      if (e.target.closest && e.target.closest('button[data-testid=\\'stChatInputSubmitButton\\']')) {
-        window.lockDownloadButtonsImmediately();
-      }
-    }, true);
-  }
-  window.enforceReadonlySelectboxes();
-  if (window._conradObserver) {
-    window._conradObserver.disconnect();
-  }
-  window._conradObserver = new MutationObserver(() => {
-    window.enforceReadonlySelectboxes();
-    const isRunning = Boolean(document.querySelector('[data-testid=\\'stStatusWidget\\']'));
-    if (isRunning) {
-      window._conradSawRunning = true;
-      window.lockDownloadButtonsImmediately();
-    } else if (window._conradSawRunning || (window._conradSubmittingTs && Date.now() - window._conradSubmittingTs > 1500)) {
-      window._conradSawRunning = false;
-      window._conradSubmittingTs = 0;
-      window.unlockDownloadButtons();
-    }
-  });
-  window._conradObserver.observe(document.body, { childList: true, subtree: true });
-" />
 """,
-    unsafe_allow_html=True,
+    unsafe_allow_javascript=True,
 )
 
 # Inicialização de Estados Reativos (Lazy — Zero Crash sem API Key)
@@ -816,6 +790,7 @@ with st.sidebar:
         options=list(DEFINITIVE_MODELS.keys()),
         index=list(DEFINITIVE_MODELS.keys()).index(st.session_state.selected_model_label),
         label_visibility="collapsed",
+        filter_mode=None,  # Dropdown puro: digitação nativamente desativada (sem selecionar/apagar texto)
     )
     selected_model_id = DEFINITIVE_MODELS[selected_label]
     if selected_model_id != st.session_state.engine.model_name:
@@ -841,6 +816,7 @@ with st.sidebar:
         format_func=lambda k: gem_options[k]["name"],
         help="Selecione uma Gem oficial ou crie sua própria Gem personalizada para qualquer disciplina.",
         label_visibility="collapsed",
+        filter_mode=None,  # Dropdown puro: digitação nativamente desativada (sem selecionar/apagar texto)
     )
     active_gem_data = gem_options[selected_gem_id]
     if st.session_state.get("current_mode") != selected_gem_id:

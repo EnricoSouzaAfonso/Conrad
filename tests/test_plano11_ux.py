@@ -48,6 +48,30 @@ class TestPlano11UX(unittest.TestCase):
         self.assertIn("gemini-3.8-flash", DEFINITIVE_MODELS.values())
         self.assertIn("gemini-3.6-flash", DEFINITIVE_MODELS.values())
 
+    def test_selectbox_somente_selecao_sem_edicao_de_texto(self):
+        """Todo st.selectbox deve ser somente-seleção: sem digitar, selecionar texto ou apagar."""
+        total_selectboxes = len(re.findall(r"st\.selectbox\(", self.app_src))
+        self.assertGreaterEqual(total_selectboxes, 2)
+        # Desativação nativa do filtro por digitação em TODOS os selectboxes
+        self.assertEqual(
+            self.app_src.count("filter_mode=None"), total_selectboxes,
+            "Todo st.selectbox deve declarar filter_mode=None (dropdown puro)!",
+        )
+        # Trava de edição no navegador: readOnly real + bloqueio de beforeinput/colar/recortar/arrastar
+        self.assertIn("inp.readOnly = true", self.app_src)
+        for evt in ("'beforeinput'", "'paste'", "'cut'", "'drop'"):
+            self.assertIn(evt, self.app_src)
+        self.assertIn("setSelectionRange(n, n)", self.app_src)
+
+    def test_javascript_executa_via_st_html_e_nao_via_markdown_sanitizado(self):
+        """st.markdown remove <script>/onload; o JS de UX precisa rodar via st.html(unsafe_allow_javascript=True)."""
+        self.assertIn("unsafe_allow_javascript=True", self.app_src)
+        self.assertNotIn("onload=", self.app_src, "Handlers inline onload são sanitizados pelo st.markdown e nunca executam!")
+        html_block = self.app_src.split("\nst.html(\n", 1)[1].split("unsafe_allow_javascript=True", 1)[0]
+        self.assertIn("enforceReadonlySelectboxes", html_block)
+        self.assertIn("lockDownloadButtonsImmediately", html_block)
+        self.assertIn("unlockDownloadButtons", html_block)
+
 
 if __name__ == "__main__":
     unittest.main()

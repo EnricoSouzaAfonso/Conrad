@@ -5,6 +5,16 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [3.4.4] - 28/10/2026
+
+### Corrigido
+- **Seletores de Modelo e de Gem 100% somente-seleção (`app.py`):** O usuário agora apenas troca a opção (clique ou setas ↑/↓ + Enter); não é mais possível digitar, selecionar o texto (inclusive por duplo/triplo clique), apagar (Backspace/Delete/Ctrl+A), colar, recortar ou arrastar texto para o campo. Aplicado `filter_mode=None` (desativação nativa do filtro por digitação do Streamlit 1.66) em todos os `st.selectbox`, somado a `readOnly` real no `<input>` do ComboBox e bloqueio de `beforeinput`/`paste`/`cut`/`drop` com seleção sempre recolhida.
+- **JavaScript de UX efetivamente executado (`app.py`):** O `st.markdown` sanitiza `<script>` e handlers inline (`onload`), por isso a lógica de `enforceReadonlySelectboxes()`, `lockDownloadButtonsImmediately()` e `unlockDownloadButtons()` nunca rodava no navegador. O bloco foi migrado para `st.html(..., unsafe_allow_javascript=True)`, com o contêiner oculto para não ocupar espaço no layout.
+
+### Adicionado
+- **Teste de ataque real ao seletor de modelo (`tests/qa_visual_inspection.py`):** No Chrome headless, a suíte de QA tenta Ctrl+A, Backspace, Delete, digitação, colagem e duplo clique no seletor de modelo e falha caso o texto seja alterado ou selecionado.
+- **Testes estáticos (`tests/test_plano11_ux.py`):** `test_selectbox_somente_selecao_sem_edicao_de_texto` e `test_javascript_executa_via_st_html_e_nao_via_markdown_sanitizado`.
+
 ## [3.4.3] - 28/10/2026
 
 ### Adicionado
